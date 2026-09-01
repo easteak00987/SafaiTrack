@@ -1,0 +1,77 @@
+# --------------------------------------------------
+# Environment & Secrets
+# --------------------------------------------------
+.env
+.env.*
+!.env.example
+*.user
+*.userosscache
+*.suo
+
+# --------------------------------------------------
+# .NET / C# (Backend)
+# --------------------------------------------------
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+*.dll
+*.exe
+*.pdb
+*.cache
+*.suo
+*.user
+*.userprefs
+.vs/
+TestResults/
+*.launchsettings.json
+appsettings.Development.json
+appsettings.Production.json
+
+# --------------------------------------------------
+# Node / Vite / React (Frontend)
+# --------------------------------------------------
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --------------------------------------------------
+# Database & Storage
+# --------------------------------------------------
+*.mdf
+*.ldf
+*.ndf
+*.bak
+*.sqlite
+*.db
+
+# --------------------------------------------------
+# IDEs & OS Files
+# --------------------------------------------------
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# --------------------------------------------------
+# Antigravity / Agentic IDE local state
+# --------------------------------------------------
+.antigravity/
+
+# --------------------------------------------------
+# Complaint Photo Uploads (never commit real files)
+# --------------------------------------------------
+backend/SafaiTrack.Api/wwwroot/uploads/complaint-photos/*
+!backend/SafaiTrack.Api/wwwroot/uploads/complaint-photos/.gitkeep
