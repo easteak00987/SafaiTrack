@@ -54,7 +54,81 @@ git push origin main
 - `npx shadcn@latest init` failed at "Validating import alias" — resolved by adding `baseUrl`/`paths` to `tsconfig.app.json` and an alias resolver to `vite.config.ts`
 - `npx shadcn@latest init` (v4.19.1) failed after writing `components.json` with "Could not load the workspace config" — resolved by using `shadcn@4.18.0` instead
 
-**Next steps:**
-- Select and adapt a Watermelon UI Hero block for the landing page, styled with the project's Sky Blue / Emerald color palette
+**Next steps (completed in next entry):**
+- ~~Select and adapt a Watermelon UI Hero block for the landing page~~ ✓
 - Build out Features, How It Works, SDG Alignment, Stats, and Footer sections
-- Sync with Fairuz before she begins the backend solution structure (Milestone 1 backend) to avoid folder/structure conflicts in `backend/`
+- Sync with Fairuz before she begins the backend solution structure
+
+---
+
+## 2026-09-02 | Phase B — Landing Page, Hero Section
+
+**Who:** Easteak Ahmed
+
+**What I did:**
+- Created the `easteak/frontend` branch off `main` (this is my personal branch for all frontend work going forward — will not create new branches per phase)
+- **Fixed the `@` import alias** — discovered that shadcn had placed generated files into a literal `@/` directory at the project root, but `vite.config.ts` had no `resolve.alias`, and `tsconfig.app.json` pointed `@/*` to `./src/*` — both wrong. Fixed:
+  - `vite.config.ts`: added `resolve.alias: { '@': path.resolve(import.meta.dirname, '@') }`
+  - `tsconfig.app.json`: updated paths to `"./@/*"` to match the actual file location
+- **Rewrote `src/index.css`** with the SafaiTrack design system:
+  - Mapped brand colors into shadcn CSS variables using `oklch()` values:
+    - `--primary` → Sky Blue `#0EA5E9`
+    - `--secondary` → Emerald `#10B981`
+    - `--accent` → Amber `#F59E0B`
+    - Foreground/dark → Slate `#1E293B`, background → Light `#F8FAFC`
+  - Added `@theme inline` brand color tokens (`--color-brand-primary/secondary/accent/dark/bg`)
+  - Added utility classes: `gradient-hero-text`, `mesh-bg`, `glow-primary`, `glow-secondary`
+- **Built `src/components/Navbar.tsx`** — sticky glassmorphic header:
+  - SafaiTrack logo with gradient icon square
+  - Nav links (Features, How It Works, SDG Alignment, Team)
+  - Sign In + gradient "Get Started" CTAs
+  - Responsive mobile dropdown with `useState` toggle
+  - Motion entrance animation (`y: -20 → 0`)
+- **Built `src/sections/HeroSection.tsx`** — full-viewport hero:
+  - Ambient gradient orbs in the background
+  - Left column: badge, h1 headline with `gradient-hero-text`, subparagraph, SDG 11 + 12 pills, CTA buttons, trust-stats row
+  - Right column: `BinVisual` — a glassmorphic card showing 4 bins (BIN-042 Critical 87%, BIN-038 High 64%, BIN-021 Normal 31%, BIN-057 Medium 52%) with animated fill bars and pulsing live indicator
+  - Floating `FloatingCard` chips (Active Routes, Ward Coverage, Open Complaints) with lucide-react icons, shown at `lg` and `xl` breakpoints
+  - All elements animated with `motion` (staggered `initial`/`animate` on enter, animated bin fill bars, bouncing scroll cue)
+- Updated `src/App.tsx` to render `<Navbar>` + `<HeroSection>`
+- Cleared `src/App.css` (styles moved to `index.css`)
+- Committed, pushed `easteak/frontend`, opened PR #1 into `main`
+
+**Commands run:**
+```bash
+# Branch setup
+git pull origin main
+git checkout -b easteak/frontend
+
+# (No npm installs needed — all deps already in place from Phase A)
+
+# Commit + push
+git add -A
+git commit -m "feat: add hero section and navbar with SafaiTrack design system"
+git push -u origin easteak/frontend
+
+# PR
+gh pr create --base main --head easteak/frontend \
+  --title "feat(phase-b): Hero section + SafaiTrack design system" \
+  --body "..."
+# → https://github.com/easteak00987/SafaiTrack/pull/1
+```
+
+**Verification:**
+- [PASS] Vite dev server restarts cleanly after alias fix, no errors in log
+- [PASS] `@/components/ui/button` and `@/components/ui/badge` resolve correctly (imported in Navbar and HeroSection without TS errors)
+- [PASS] Design system colors render (Sky Blue primary, Emerald secondary, Amber accent confirmed in generated preview)
+- [PASS] Hero section renders with two-column layout, animated bin dashboard, floating cards, gradient headline, CTAs
+- [PASS] Committed and pushed to `easteak/frontend`; PR #1 opened
+
+**Issues encountered:**
+- `import.meta.dirname` vs `__dirname` in `vite.config.ts`: using `__dirname` produced a Vite native-configLoader warning; switched to `import.meta.dirname` (no impact on behavior)
+- shadcn placed generated files in `./@ /` at project root (not `./src/`), but tsconfig/vite had no alias pointing there — fixed both
+
+**Next steps:**
+- Get review/approval on Hero section before building Features section
+- Features section (6 feature cards with icons, gradient header)
+- How It Works (3-step numbered flow)
+- SDG Alignment (UN SDG 11 + 12 callout blocks)
+- Stats bar (animated counters)
+- Footer (links, team credits, copyright)
