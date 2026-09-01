@@ -2,6 +2,10 @@
 
 **Stack:** ASP.NET Core Web API (C#) · React + Vite (TypeScript) + Tailwind CSS v4 + shadcn/ui · SQL Server + Entity Framework Core
 
+> **Note — deviates from proposal:** the submitted project proposal (Section 9, Technology Stack Summary) specifies "Razor Views with Bootstrap, or a lightweight JavaScript dashboard for analytics" for the frontend. The team has decided to build a decoupled React + TypeScript SPA (Vite, Tailwind CSS v4, shadcn/ui on Radix primitives) communicating with the ASP.NET Core Web API via JWT-secured REST endpoints, instead of server-rendered Razor Views. Reasoning: a component-driven React/Tailwind stack produces a more distinctive, professional, portfolio-worthy UI than server-rendered Bootstrap, and better supports the course's "real-world engineering" evaluation criteria. This is a deliberate, documented decision, not an unplanned drift — flag it to course instructors if asked to reconcile the repo against the original proposal PDF.
+>
+> **Downstream consequence:** since the frontend is now a separate SPA rather than server-rendered pages, the backend must be built API-first (JWT bearer auth instead of cookie-based Identity sessions, CORS enabled for the Vite dev origin) rather than as an ASP.NET Core MVC app with Razor views.
+
 > **Note on ordering:** the team has chosen to build **frontend-first**, ahead of the backend-led order this plan's milestones originated from. Milestone *numbers* still map to the original feature grouping (for traceability against the proposal), but the **actual build order** follows the sequence in [Section 0](#0-actual-build-order) below.
 
 ---

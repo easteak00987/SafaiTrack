@@ -62,6 +62,8 @@ Since large-scale IoT bin sensors are outside the budget and hardware scope of t
 
 ## Technology Stack
 
+> **Note — deviates from proposal:** the original project proposal specified Razor Views with Bootstrap for the frontend. The team switched to a decoupled React + TypeScript SPA with Tailwind CSS + shadcn/ui instead, since it gives a more distinctive, professional, portfolio-worthy UI than server-rendered Razor/Bootstrap and better supports the "real-world engineering" goal of the course. This is a deliberate, documented architecture change — not an unplanned drift from the approved proposal.
+
 | Layer | Technology |
 |---|---|
 | **Backend** | ASP.NET Core (C#) Web API |
