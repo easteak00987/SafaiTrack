@@ -204,3 +204,24 @@ gh pr create --base main --head easteak/frontend \
 
 **Next steps:**
 - Proceed with backend API integration when ready.
+
+---
+
+## 2026-09-04 | UI Polish & Legibility Phase 2 (Dashboard Zooming)
+
+**Who:** Easteak Ahmed
+
+**What I did:**
+- Fixed a typography bug where negative letter-spacing caused large numbers to overlap (e.g., '12' rendering improperly). Halved all negative letter-spacing globally and set spacing to normal on giant metric fonts.
+- Scaled up .metric-card and .signal-card paddings to give a more "zoomed-in" and substantial feel to the dashboard boxes.
+- Bumped up font sizes and weights for the Live Signals list to fill the larger card.
+- Scaled up the Complaint Pulse table typography (headers, data, reference IDs, and status badges).
+- Enlarged and darkened the primary top-card icons, increasing their stroke width and bounding box for a heavier, premium aesthetic.
+- Enlarged the chart legend elements.
+- Enlarged the breadcrumb heading ("DHAKA NORTH > OVERVIEW"), changing its color to the high-contrast ar(--ink) theme variable and giving it extra-bold weight to act as a proper highlight.
+
+**Files changed:**
+- \client/src/index.css\ (Global padding scaling, letter-spacing fixes, typography bumps)
+
+**Next steps:**
+- Await further instructions or proceed to backend integration.
