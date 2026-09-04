@@ -132,3 +132,54 @@ gh pr create --base main --head easteak/frontend \
 - SDG Alignment (UN SDG 11 + 12 callout blocks)
 - Stats bar (animated counters)
 - Footer (links, team credits, copyright)
+
+---
+
+## 2026-09-04 | Frontend Replacement — Manus Build Integration
+
+**Who:** Easteak Ahmed
+
+**What I did:**
+- Replaced the entire previous Phase B frontend (Hero + Navbar only) with the full Manus-built frontend
+- Deleted old `src/`, `index.html`, `package.json`, `package-lock.json`, `vite.config.ts`, `tsconfig.app.json`, `tsconfig.json`, `tsconfig.node.json` from `frontend/safai-track-client/`
+- Copied Manus build files into `frontend/safai-track-client/`: `client/`, `shared/`, `patches/`, `package.json`, `pnpm-lock.yaml`, `vite.config.ts`, `tsconfig.json`, `tsconfig.node.json`, `.prettierrc`, `.prettierignore`, `.gitignore`, `.gitkeep`
+- Cleaned `vite.config.ts`: removed Manus-only plugins, removed `@assets` alias, narrowed `allowedHosts` to localhost only
+- Cleaned `package.json`: removed `express`, `esbuild`, `tsx`, `vite-plugin-manus-runtime`, `@builder.io/vite-plugin-jsx-loc`; fixed `build` script to `vite build`; removed `start` script
+- Ran `pnpm install` (557 packages) and approved `@tailwindcss/oxide` + `esbuild` build scripts
+- Fixed image extensions: updated all `/manus-storage/*.jpg` to `.webp` in `App.tsx` and `index.css`
+- Copied 3 webp images to correct Vite public folder: `client/public/manus-storage/`
+- Verified `pnpm run build` succeeds (2644 modules, 9.56s) and dev server runs at http://localhost:3000/
+
+**What the Manus build includes:**
+- `/` Landing page (hero, scroll image strip, signal cards, route engine section, SDG alignment, footer)
+- `/login`, `/register` Auth pages
+- `/citizen/dashboard`, `/citizen/report`, `/citizen/complaints` Citizen portal
+- `/driver/dashboard`, `/driver/route` Driver console with live route map
+- `/officer/dashboard`, `/officer/complaints/:id` Ward officer desk
+- `/home` Overview dashboard with metrics, chart, complaint table
+- `/settings` Settings page
+
+**Commands run:**
+  pnpm install
+  pnpm approve-builds
+  pnpm run build
+  pnpm run dev
+  git add -A
+  git commit -m "feat: replace frontend with Manus build"
+  git push origin easteak/frontend
+
+**Verification:**
+- [PASS] pnpm run build succeeds with 0 errors (2644 modules)
+- [PASS] All 3 webp images resolve correctly
+- [PASS] Dev server starts cleanly at localhost:3000
+
+**Issues encountered:**
+- Manus-specific plugins removed (not needed outside Manus environment)
+- Images were .webp not .jpg — updated all references in source
+- Images placed in wrong folder initially — moved to correct Vite public root
+- EBUSY error on Vite watcher when images copied while server running — fixed by restart
+
+**Next steps:**
+- Connect frontend to ASP.NET Core backend APIs when backend is ready
+- Replace mock data in App.tsx with real API calls
+- Add real authentication flow (JWT)
