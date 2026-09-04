@@ -183,3 +183,24 @@ gh pr create --base main --head easteak/frontend \
 - Connect frontend to ASP.NET Core backend APIs when backend is ready
 - Replace mock data in App.tsx with real API calls
 - Add real authentication flow (JWT)
+
+---
+
+## 2026-09-04 | UI Polish & Typography Legibility Upgrade
+
+**Who:** Easteak Ahmed
+
+**What I did:**
+- Conducted a comprehensive audit of all typography across the application to fix legibility issues.
+- Systematically bumped all small font sizes (8px - 13px) up to readable baseline sizes (13px - 16px).
+- Darkened light-gray (--muted) text significantly to --ink-2 to pass contrast ratio checks and improve readability on light backgrounds.
+- Increased the sidebar width from 250px to 330px to prevent cramped navigation.
+- Increased Topbar icon sizes (Bell, Search) and Avatar sizes for better hit targets.
+- Applied aggressive scaling to dashboard metric cards and live signals text to ensure they are easily readable from a distance.
+
+**Files changed:**
+- \client/src/index.css\ (Global CSS variables, font sizes, colors)
+- \client/src/App.tsx\ (Icon size overrides)
+
+**Next steps:**
+- Proceed with backend API integration when ready.
