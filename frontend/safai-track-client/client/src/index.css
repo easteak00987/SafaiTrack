@@ -3132,3 +3132,39 @@ table td small {
   height: 17px !important;
   stroke-width: 2.5px !important;
 }
+
+
+/* --- LANDING PAGE SIGNAL CARDS --- */
+.signal-card {
+  padding: 60px !important;
+  min-height: 450px !important;
+  border: 1px solid rgba(16, 59, 60, 0.1) !important;
+}
+.card-top {
+  font-size: 16px !important;
+}
+.card-top svg {
+  width: 32px !important;
+  height: 32px !important;
+  stroke-width: 2.5px !important;
+  color: var(--ink) !important;
+}
+.signal-card h3 {
+  font-size: 32px !important;
+}
+.signal-card p {
+  font-size: 19px !important;
+}
+
+/* --- HERO OVERLAY ANIMATIONS --- */
+.footer-ticker {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+  animation: footerFadeIn 0.5s ease forwards;
+}
+@keyframes footerFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

@@ -225,3 +225,26 @@ gh pr create --base main --head easteak/frontend \
 
 **Next steps:**
 - Await further instructions or proceed to backend integration.
+
+---
+
+## 2026-09-07 | Landing Page Animations & UI Polish Phase 3
+
+**Who:** Easteak Ahmed
+
+**What I did:**
+- Added a lime-green truck icon that continuously animates along the dotted route path inside the hero overlay card using SVG animateMotion + mpath, rotating to follow the curve.
+- Added an auto-cycling location/fill ticker in the hero overlay panel footer: cycles through Dhanmondi 08 (84%), Kalabagan 03 (61%), Lalmatia 06 (47%), Mohammadpur 11 (76%) every 3 seconds with a smooth fade+slide-up CSS transition.
+- Scaled up landing page story/signal cards: bigger padding, min-height, icons (32px, 2.5px stroke), bolder headings, border separator.
+- Bumped breadcrumb (crumb) to 17-18px, extra-bold, high-contrast ink color.
+- Scaled up metric card icons to 50x50px with 2.5px stroke-width for a premium bold look.
+- Scaled up Complaint Pulse table: headers 17px, row data 18-19px, ref-links 18px bold, status badges 17px with larger dot.
+- Scaled chart legend text and dot for proportional legibility.
+- Scaled live signals list (stop-index, signal-row b/small) for zoom parity with card.
+
+**Files changed:**
+- `client/src/App.tsx` — Truck animateMotion, auto-cycle ticker useEffect, footer-ticker div
+- `client/src/index.css` — All CSS overrides for above
+
+**Next steps:**
+- Hero image background (safaitrack-hero_ab8e9511.webp) is missing from local public/manus-storage — fix by replacing with hosted or local image.
