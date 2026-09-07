@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { BrowserRouter, Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, animate, motion, useMotionValue, useMotionValueEvent, useScroll, useTransform } from "framer-motion";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from "recharts";
-import { ArrowUpRight, Bell, Bike, Check, ChevronRight, CircleAlert, ClipboardList, Clock3, Compass, FileText, Filter, Gauge, LayoutDashboard, MapPin, Menu, Navigation, Radio, Route as RouteIcon, Search, Settings2, ShieldCheck, Sparkles, Truck, UserRound, X, Zap } from "lucide-react";
+import { ArrowUpRight, Bell, Bike, Camera, Check, ChevronDown, ChevronRight, CircleAlert, ClipboardList, Clock3, Compass, Eye, EyeOff, FileText, Filter, Gauge, Key, LayoutDashboard, Lock, Mail, MapPin, Menu, Navigation, Radio, RefreshCw, Route as RouteIcon, Search, Settings2, Shield, ShieldCheck, Sparkles, Truck, User, UserRound, X, Zap } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { getBinsForWardSync, computeDijkstraRoute, computeNearestNeighborRoute } from "./lib/routeOptimizer";
@@ -754,9 +754,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
           </NavLink>
         </nav>
         <div className="sidebar-foot">
-          <div className="live-dot">
-            <i /> Model synced 2m ago
-          </div>
           <div className="profile">
             <span style={{ backgroundColor: currentUser.avatarColor }}>{currentUser.initials}</span>
             <div>
@@ -800,10 +797,474 @@ function MetricCard({ label, value, detail, tone = "lime", icon: Icon }: { label
 function Overview({ currentUser }: { currentUser?: UserProfile }) { 
   const firstName = currentUser?.name ? currentUser.name.split(" ")[0] : "Arif";
   return <div className="page-wrap"><div className="page-heading"><div><div className="eyebrow dark"><SignalBar /> LIVE OPERATIONS / WARD 08</div><h1>Good morning, {firstName}.</h1><p>Here’s what is moving across Dhanmondi and the surrounding wards.</p></div><div className="heading-actions"><button className="outline-button"><Clock3 size={16} /> 06:42 AM BST</button><Link to="/driver/route" className="lime-button"><Zap size={16} /> Generate route</Link></div></div><motion.div variants={stagger} initial="hidden" whileInView="show" viewport={{ once: false, amount: 0.2 }} className="metric-grid"><MetricCard label="Priority bins" value={12} detail="+4 since 06:00" icon={CircleAlert} tone="coral" /><MetricCard label="Collection coverage" value={78} detail="+12% vs. yesterday" icon={Gauge} /><MetricCard label="Distance avoided" value={18.4} detail="vs. fixed schedule" icon={RouteIcon} tone="blue" /><MetricCard label="Open complaints" value={3} detail="1 needs attention" icon={ClipboardList} tone="coral" /></motion.div><div className="dashboard-grid"><section className="surface chart-surface"><div className="surface-head"><div><span className="overline">FILL SIGNAL / LAST 7 DAYS</span><h2>Ward demand is <em>rising.</em></h2></div><button className="filter-button">This week <ChevronRight size={14} /></button></div><div className="chart-wrap"><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData}><defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#C8F04A" stopOpacity={.45}/><stop offset="100%" stopColor="#C8F04A" stopOpacity={0}/></linearGradient></defs><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "#83908a", fontSize: 11 }} /><Tooltip contentStyle={{ background: "#103B3C", border: 0, borderRadius: 10, color: "#fff" }} /><Area type="monotone" dataKey="value" stroke="#8baa2d" strokeWidth={3} fill="url(#fill)" /></AreaChart></ResponsiveContainer></div><div className="chart-legend"><span><i className="dot lime" /> Average fill level</span><span>Threshold <b>60%</b></span></div></section><section className="surface signal-surface"><div className="surface-head"><div><span className="overline">LIVE SIGNALS</span><h2>Needs attention <em>now.</em></h2></div><Link to="/citizen/complaints" className="text-link dark">View all <ArrowUpRight size={14} /></Link></div><div className="signal-list">{stops.slice(0,3).map((stop, i) => <div className="signal-row" key={stop.name}><span className={`stop-index ${stop.tone}`}>{String(i+1).padStart(2,"0")}</span><div><b>{stop.name}</b><small>{stop.area}</small></div><div className="fill-meter"><div style={{width: `${stop.fill}%`}} /><span>{stop.fill}%</span></div><ChevronRight size={15} /></div>)}</div><Link to="/driver/route" className="route-link"><RouteIcon size={16} /> Open optimized route <ArrowUpRight size={14} /></Link></section></div><section className="surface complaints-surface"><div className="surface-head"><div><span className="overline">ACCOUNTABLE RESPONSE</span><h2>Complaint pulse</h2></div><Link to="/citizen/complaints" className="outline-button small">View complaints <ArrowUpRight size={14} /></Link></div><div className="table-wrap"><table><thead><tr><th>Reference</th><th>Location</th><th>Category</th><th>Status</th><th>Logged</th><th /></tr></thead><tbody>{complaints.slice(0,3).map(c => <tr key={c.id}><td><Link to={`/citizen/complaints/${c.id}`} className="ref-link">{c.id}</Link></td><td><b>{c.location}</b><small>{c.ward}</small></td><td>{c.category}</td><td><Status status={c.status} /></td><td>{c.time}</td><td><ChevronRight size={16} /></td></tr>)}</tbody></table></div></section></div> }
-function ComplaintsPage() { const [filter,setFilter]=useState("All"); const visible=filter === "All" ? complaints : complaints.filter(c=>c.status===filter); return <div className="page-wrap"><div className="page-heading"><div><div className="eyebrow dark"><SignalBar color="coral" /> CITIZEN RECORD / WARD 08</div><h1>Complaint trail.</h1><p>Every signal logged, assigned, and visible until it is resolved.</p></div><Link to="/citizen/report" className="lime-button"><CircleAlert size={16} /> Report an issue</Link></div><div className="filter-tabs">{["All","Pending","In Progress","Resolved"].map(f=><button key={f} onClick={()=>setFilter(f)} className={filter===f?"active":""}>{f}<span>{f==="All"?complaints.length:complaints.filter(c=>c.status===f).length}</span></button>)}</div><motion.div variants={stagger} initial="hidden" animate="show" className="complaint-cards">{visible.map(c=><motion.div variants={rise} whileHover={{ y: -8, boxShadow: "0 20px 40px rgba(0,0,0,.3)" }} whileTap={{ scale: .98 }} transition={{ type: "spring", stiffness: 400, damping: 25 }} key={c.id} className="complaint-card"><div className="complaint-top"><span className="ref-link">{c.id}</span><Status status={c.status} /></div><h3>{c.location}</h3><p>{c.note}</p><div className="complaint-meta"><span><MapPin size={14} /> {c.ward}</span><span><Clock3 size={14} /> {c.time}</span><span className="fill-chip">{c.fill}% fill signal</span></div><Link to={`/citizen/complaints/${c.id}`} className="card-arrow">Open complaint <ArrowUpRight size={15} /></Link></motion.div>)}</motion.div></div> }
+function ComplaintsPage() { 
+  const [filter, setFilter] = useState("All"); 
+  const visible = filter === "All" ? complaints : complaints.filter(c => c.status === filter); 
+  
+  return (
+    <div className="page-wrap complaints-page-wrap">
+      <div className="page-heading complaints-page-heading">
+        <div>
+          <div className="complaints-eyebrow">
+            <SignalBar color="coral" /> CITIZEN RECORD / WARD 08
+          </div>
+          <h1>Complaint trail.</h1>
+          <p>Every signal logged, assigned, and visible until it is resolved.</p>
+        </div>
+        <Link to="/citizen/report" className="complaints-report-btn">
+          <CircleAlert size={20} strokeWidth={2.4} /> 
+          <span>Report an issue</span>
+          <ArrowUpRight size={18} strokeWidth={2.6} />
+        </Link>
+      </div>
+
+      <div className="complaints-filter-tabs">
+        {["All", "Pending", "In Progress", "Resolved"].map(f => (
+          <button 
+            key={f} 
+            onClick={() => setFilter(f)} 
+            className={`complaints-filter-tab ${filter === f ? "active" : ""}`}
+          >
+            <span>{f}</span>
+            <span className="tab-count">
+              {f === "All" ? complaints.length : complaints.filter(c => c.status === f).length}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <motion.div variants={stagger} initial="hidden" animate="show" className="complaints-cards-grid">
+        {visible.map(c => (
+          <motion.div 
+            variants={rise} 
+            whileHover={{ y: -6, boxShadow: "0 24px 50px rgba(16, 59, 60, 0.12)" }} 
+            whileTap={{ scale: 0.99 }} 
+            transition={{ type: "spring", stiffness: 400, damping: 25 }} 
+            key={c.id} 
+            className="complaint-card-upgraded"
+          >
+            <div className="complaint-top-row">
+              <span className="complaint-ref-badge">{c.id}</span>
+              <Status status={c.status} />
+            </div>
+
+            <h3 className="complaint-title">{c.location}</h3>
+            <p className="complaint-note">{c.note}</p>
+
+            <div className="complaint-meta-row">
+              <span className="meta-item"><MapPin size={16} strokeWidth={2.2} /> {c.ward}</span>
+              <span className="meta-item"><Clock3 size={16} strokeWidth={2.2} /> {c.time}</span>
+              <span className="fill-signal-badge">{c.fill}% fill signal</span>
+            </div>
+
+            <Link to={`/citizen/complaints/${c.id}`} className="complaint-action-link">
+              <span>Open complaint audit trail</span>
+              <ArrowUpRight size={19} strokeWidth={2.6} className="action-arrow-icon" />
+            </Link>
+          </motion.div>
+        ))}
+      </motion.div>
+    </div>
+  ); 
+}
 function ComplaintDetail({ officer = false }: { officer?: boolean }) { const { id } = useParams(); const c = complaints.find(x=>x.id===id) || complaints[0]; const [status,setStatus]=useState(c.status); return <div className="page-wrap narrow"><Link to={officer?"/officer/dashboard":"/citizen/complaints"} className="back-link">{officer ? "← Back to officer desk" : "← Back to complaints"}</Link><div className="detail-heading"><div><div className="eyebrow dark"><SignalBar color={status === "Resolved" ? "lime":"coral"} /> {c.id} / AUDIT TRAIL</div><h1>{c.location}</h1><p>{c.category} · {c.ward} · logged {c.time}</p></div><Status status={status} /></div><div className="detail-grid"><section className="surface detail-main"><div className="detail-photo"><img src="/manus-storage/safaitrack-field_adf72cdb.webp" alt="Field crew checking a bin" /><span><MapPin size={14} /> Dhanmondi, Dhaka</span></div><h2>{c.note}</h2><p className="body-copy">This record is visible to the citizen, ward officer, dispatch team, and assigned driver. The shared trail prevents a street-level signal from disappearing into an informal call.</p><div className="timeline">{[["08:14", "Reported by citizen", "Signal entered the ward record.", "done"],["08:22", "Assigned to Ward 08", "Officer Arif Rahman acknowledged the issue.", "done"],["08:31", "Field response in motion", "Truck DHK-08 is sequenced for the next useful stop.", status !== "Pending" ? "active":""],["—", "Resolved", "Collection proof and response note will appear here.", status === "Resolved" ? "done":"pending"]].map(([time,title,desc,state])=><div className={`timeline-item ${state}`} key={title}><span className="timeline-time">{time}</span><span className="timeline-dot">{state === "done" ? <Check size={13}/> : state === "active" ? <i/> : ""}</span><div><b>{title}</b><p>{desc}</p></div></div>)}</div></section><aside className="detail-aside"><div className="surface"><span className="overline">SERVICE CONTEXT</span><div className="context-stat"><b>{c.fill}%</b><span>simulated fill level</span></div><div className="context-row"><span>Priority</span><b>High</b></div><div className="context-row"><span>Assigned ward</span><b>{c.ward}</b></div><div className="context-row"><span>Response SLA</span><b>2 hours</b></div></div>{officer && <div className="surface officer-actions"><span className="overline">OFFICER ACTION</span><h3>Move this record forward.</h3><button onClick={()=>{setStatus(status === "Pending" ? "In Progress" : "Resolved"); toast.success("Complaint timeline updated");}} className="lime-button full">{status === "Pending" ? "Start response" : status === "In Progress" ? "Mark resolved" : "Resolved"}<ArrowUpRight size={15}/></button><button className="outline-button full" onClick={()=>toast.success("Note added to complaint record")}>Add field note</button></div>}</aside></div></div> }
-function ReportPage() { const { register, handleSubmit, reset } = useForm(); const [submitted,setSubmitted]=useState(false); return <div className="page-wrap narrow"><Link to="/citizen/complaints" className="back-link">← Back to complaints</Link><div className="form-heading"><div className="eyebrow dark"><SignalBar color="coral" /> NEW CITIZEN SIGNAL</div><h1>Log what the street<br /><em>is telling you.</em></h1><p>Give the ward team enough detail to act without a second phone call.</p></div>{submitted ? <div className="success-state surface"><div className="success-icon"><Check size={26}/></div><span className="overline">RECORD CREATED / ST-2411</span><h2>Signal received.</h2><p>Your report is now visible to Ward 08 operations. We’ll keep the response trail open here.</p><Link to="/citizen/complaints/ST-2411" className="lime-button">View response trail <ArrowUpRight size={15}/></Link></div> : <form onSubmit={handleSubmit(()=>{setSubmitted(true); reset(); toast.success("Complaint submitted to Ward 08");})} className="surface report-form"><label>What needs attention?<select {...register("category")}><option>Overflowing bin</option><option>Missed collection</option><option>Damaged bin</option><option>Illegal dumping</option></select></label><label>Where is it?<div className="input-with-icon"><MapPin size={16}/><input {...register("location",{required:true})} placeholder="Search a landmark or street" /></div></label><label>What did you notice?<textarea {...register("description",{required:true})} rows={5} placeholder="Describe the situation for the ward team…" /></label><div className="upload-box"><div><FileText size={20}/><b>Add a photo (optional)</b><small>JPG, PNG up to 10MB</small></div><button type="button" className="outline-button small" onClick={()=>toast("Photo upload is a frontend placeholder")}>Choose file</button></div><div className="form-actions"><span><ShieldCheck size={15}/> Your location is used only for this service record.</span><button className="lime-button" type="submit">Submit signal <ArrowUpRight size={15}/></button></div></form>}</div> }
+function ReportPage() { 
+  const { register, handleSubmit, reset } = useForm(); 
+  const [submitted, setSubmitted] = useState(false); 
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+      toast.success(`Photo attached: ${file.name}`);
+    }
+  };
+
+  const handleRemoveFile = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedFile(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  return (
+    <div className="page-wrap narrow report-page-wrap">
+      <Link to="/citizen/complaints" className="report-back-link">
+        <span className="back-arrow">←</span>
+        <span>Back to complaints</span>
+      </Link>
+
+      <div className="report-form-heading">
+        <div className="report-eyebrow">
+          <SignalBar color="coral" /> NEW CITIZEN SIGNAL
+        </div>
+        <h1>
+          Log what the street<br />
+          <em>is telling you.</em>
+        </h1>
+        <p>Give the ward team enough detail to act without a second phone call.</p>
+      </div>
+
+      {submitted ? (
+        <div className="success-state surface">
+          <div className="success-icon"><Check size={32} strokeWidth={2.6}/></div>
+          <span className="overline">RECORD CREATED / ST-2411</span>
+          <h2>Signal received.</h2>
+          <p>Your report is now visible to Ward 08 operations. We’ll keep the response trail open here.</p>
+          <Link to="/citizen/complaints/ST-2411" className="lime-button report-success-btn">
+            View response trail <ArrowUpRight size={18} strokeWidth={2.5}/>
+          </Link>
+        </div>
+      ) : (
+        <form 
+          onSubmit={handleSubmit(() => {
+            setSubmitted(true); 
+            reset(); 
+            setSelectedFile(null);
+            setPreviewUrl(null);
+            toast.success("Complaint submitted to Ward 08");
+          })} 
+          className="report-form-card"
+        >
+          <div className="report-field-group">
+            <label htmlFor="report-category">What needs attention?</label>
+            <div className="report-select-wrap">
+              <select id="report-category" {...register("category")}>
+                <option>Overflowing bin</option>
+                <option>Missed collection</option>
+                <option>Damaged bin</option>
+                <option>Illegal dumping</option>
+              </select>
+              <ChevronDown size={22} className="report-select-arrow" strokeWidth={2.4} />
+            </div>
+          </div>
+
+          <div className="report-field-group">
+            <label htmlFor="report-location">Where is it?</label>
+            <div className="report-input-with-icon">
+              <MapPin size={22} className="report-field-icon" />
+              <input 
+                id="report-location"
+                {...register("location", { required: true })} 
+                placeholder="Search a landmark or street" 
+              />
+            </div>
+          </div>
+
+          <div className="report-field-group">
+            <label htmlFor="report-description">What did you notice?</label>
+            <textarea 
+              id="report-description"
+              {...register("description", { required: true })} 
+              rows={4} 
+              placeholder="Describe the situation for the ward team…" 
+            />
+          </div>
+
+          <div className="report-field-group">
+            <label>Add a photo (optional)</label>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileChange} 
+              accept="image/*" 
+              style={{ display: "none" }} 
+            />
+            <div 
+              className={`report-upload-box ${selectedFile ? "has-file" : ""}`}
+              onClick={() => fileInputRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click(); }}
+            >
+              {selectedFile ? (
+                <div className="report-upload-preview">
+                  {previewUrl && <img src={previewUrl} alt="Attached preview" className="upload-thumb" />}
+                  <div className="upload-file-info">
+                    <b className="upload-file-name">{selectedFile.name}</b>
+                    <small className="upload-file-meta">{(selectedFile.size / 1024).toFixed(1)} KB · Attached successfully</small>
+                  </div>
+                  <button 
+                    type="button" 
+                    className="upload-remove-btn" 
+                    onClick={handleRemoveFile}
+                    title="Remove attached photo"
+                  >
+                    <X size={16} strokeWidth={2.5} /> Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="report-upload-inner">
+                  <div className="report-upload-icon-wrap">
+                    <Camera size={26} strokeWidth={2.2} />
+                  </div>
+                  <div className="report-upload-text">
+                    <b>Attach field photograph</b>
+                    <small>JPG, PNG or WEBP up to 10MB · Click anywhere to browse</small>
+                  </div>
+                  <button 
+                    type="button" 
+                    className="report-choose-btn"
+                    onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                  >
+                    Choose file
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="report-form-actions">
+            <div className="report-security-badge">
+              <ShieldCheck size={20} className="shield-icon" strokeWidth={2.4} /> 
+              <span>Your location is used only for this service record.</span>
+            </div>
+            <button className="report-submit-btn" type="submit">
+              Submit signal <ArrowUpRight size={20} strokeWidth={2.6} />
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  ); 
+}
 function RoutePage() { const [running,setRunning]=useState(false); return <div className="page-wrap"><div className="page-heading"><div><div className="eyebrow dark"><SignalBar /> ROUTE ENGINE / LIVE</div><h1>Route in motion.</h1><p>Priority-weighted sequence for Ward 08, generated from current fill signals.</p></div><div className="heading-actions"><button className="outline-button"><Filter size={16}/> Dijkstra / weighted</button><button onClick={()=>{setRunning(!running);toast.success(running?"Route paused":"Route started")}} className="lime-button">{running?<span className="pulse-text">Route running</span>:"Start route"} <ArrowUpRight size={15}/></button></div></div><div className="route-layout"><section className="surface live-map"><div className="map-toolbar"><span><i className="live-pip"/> LIVE ROUTE / DHK-08</span><span>06:42:18 BST</span></div><div className="big-map"><img src="/manus-storage/safaitrack-ward-map_aa0dc48a.webp" alt="Ward map with route line" /><svg className="route-svg" viewBox="0 0 800 500" preserveAspectRatio="none"><path d="M80 420 C 175 270, 190 380, 305 170 S 485 150, 555 310 S 650 370, 735 90" /></svg>{stops.map((s,i)=><motion.div animate={{ y: running ? [0,-5,0] : 0 }} transition={{ repeat: running?Infinity:0, duration:1.5, delay:i*.2 }} className={`big-node ${s.tone}`} key={s.name} style={{left:`${[12,37,57,82][i]}%`,top:`${[78,34,60,18][i]}%`}}><span>{i+1}</span><b>{s.name}</b></motion.div>)}</div><div className="map-legend"><span><i className="legend-line"/> Efficient route</span><span><i className="legend-dot coral"/> Overflow alert</span><span><i className="legend-dot lime"/> Collection stop</span></div></section><aside className="surface stop-panel"><div className="surface-head"><div><span className="overline">STOP SEQUENCE</span><h2>05 priority stops</h2></div><span className="distance-badge"><Zap size={16} /> 18.4 km saved</span></div><div className="stop-list">{stops.map((s,i)=><div className={`stop-item ${i===0?"current":""}`} key={s.name}><span className={`stop-number ${s.tone}`}>{String(i+1).padStart(2,"0")}</span><div><b>{s.name}</b><small>{s.area}</small></div><div className="stop-fill"><strong>{s.fill}%</strong><small>{s.eta}</small></div></div>)}</div><div className="truck-status"><div className="truck-icon-wrap"><Truck size={24} strokeWidth={2.4}/></div><span><b>DHK-08 / Kabir Hossain</b><small>Available · 1.2 km from first stop</small></span><span className="truck-live-dot" title="Truck active" /></div></aside></div></div> }
+function ForgotPasswordModal({ 
+  isOpen, 
+  onClose, 
+  defaultEmail = "" 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  defaultEmail?: string; 
+}) {
+  const [step, setStep] = useState<"email" | "otp" | "reset" | "success">("email");
+  const [email, setEmail] = useState(defaultEmail);
+  const [otp, setOtp] = useState(["8", "4", "0", "9", "1", "2"]);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [timer, setTimer] = useState(119);
+  const [isSending, setIsSending] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setStep("email");
+      setNewPassword("");
+      setConfirmPassword("");
+    } else if (defaultEmail) {
+      setEmail(defaultEmail);
+    }
+  }, [isOpen, defaultEmail]);
+
+  useEffect(() => {
+    let interval: any;
+    if (step === "otp" && timer > 0) {
+      interval = setInterval(() => setTimer(t => t - 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [step, timer]);
+
+  if (!isOpen) return null;
+
+  const handleSendCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    setIsSending(true);
+    setTimeout(() => {
+      setIsSending(false);
+      setStep("otp");
+      setTimer(119);
+      toast.success("Security verification signal dispatched to " + email);
+    }, 700);
+  };
+
+  const handleVerifyOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    setStep("reset");
+    toast.success("Identity confirmed. Set a new access key.");
+  };
+
+  const handleResetPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    setStep("success");
+    toast.success("Access key updated successfully!");
+    setTimeout(() => {
+      onClose();
+    }, 2400);
+  };
+
+  const minutes = String(Math.floor(timer / 60)).padStart(2, "0");
+  const seconds = String(timer % 60).padStart(2, "0");
+
+  return (
+    <AnimatePresence>
+      <div className="forgot-modal-backdrop" onClick={onClose}>
+        <motion.div 
+          className="forgot-modal-card"
+          onClick={e => e.stopPropagation()}
+          initial={{ opacity: 0, scale: 0.92, y: 24 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.92, y: 24 }}
+          transition={{ type: "spring", damping: 24, stiffness: 320 }}
+        >
+          {/* Animated decorative color orbs */}
+          <div className="modal-glow-orbs" aria-hidden="true">
+            <span className="glow-orb lime" />
+            <span className="glow-orb coral" />
+            <span className="glow-orb cyan" />
+          </div>
+
+          <button className="modal-close-btn" onClick={onClose} aria-label="Close modal">
+            <X size={18} />
+          </button>
+
+          {step === "email" && (
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="modal-step">
+              <div className="modal-badge coral">
+                <Sparkles size={14} /> SECURE KEY RECOVERY
+              </div>
+              <h3>Reset ward access</h3>
+              <p>Enter the email address tied to your ward workspace. We’ll send an encrypted recovery signal.</p>
+
+              <form onSubmit={handleSendCode} className="modal-form">
+                <div className="input-with-icon">
+                  <Mail size={16} className="field-icon" />
+                  <input 
+                    type="email" 
+                    required 
+                    value={email} 
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="you@municipality.gov.bd" 
+                    autoFocus
+                  />
+                </div>
+                <button type="submit" className="lime-button full" disabled={isSending}>
+                  {isSending ? "Dispatching signal..." : "Send recovery code"} <ArrowUpRight size={17} />
+                </button>
+              </form>
+            </motion.div>
+          )}
+
+          {step === "otp" && (
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="modal-step">
+              <div className="modal-badge cyan">
+                <ShieldCheck size={14} /> ENTER 6-DIGIT CODE
+              </div>
+              <h3>Verify ward identity</h3>
+              <p>We transmitted a code to <b>{email}</b>. Simulated security code auto-filled for preview:</p>
+
+              <form onSubmit={handleVerifyOtp} className="modal-form">
+                <div className="otp-digit-row">
+                  {otp.map((digit, idx) => (
+                    <input 
+                      key={idx} 
+                      type="text" 
+                      maxLength={1} 
+                      value={digit} 
+                      onChange={e => {
+                        const newOtp = [...otp];
+                        newOtp[idx] = e.target.value.slice(-1);
+                        setOtp(newOtp);
+                      }}
+                      className="otp-box"
+                    />
+                  ))}
+                </div>
+
+                <div className="otp-timer-row">
+                  <span>Code expires in: <b>{minutes}:{seconds}</b></span>
+                  <button type="button" onClick={() => { setTimer(119); toast.success("New code dispatched"); }} className="resend-link">
+                    <RefreshCw size={13} /> Resend
+                  </button>
+                </div>
+
+                <button type="submit" className="lime-button full">
+                  Verify & Proceed <ArrowUpRight size={17} />
+                </button>
+              </form>
+            </motion.div>
+          )}
+
+          {step === "reset" && (
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="modal-step">
+              <div className="modal-badge lime">
+                <Key size={14} /> CREATE NEW KEY
+              </div>
+              <h3>Set new password</h3>
+              <p>Choose a strong password to protect your field assignments and ward operations.</p>
+
+              <form onSubmit={handleResetPassword} className="modal-form">
+                <div className="input-with-icon">
+                  <Lock size={16} className="field-icon" />
+                  <input 
+                    type="password" 
+                    required 
+                    placeholder="New password (min. 6 chars)" 
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                  />
+                </div>
+                <div className="input-with-icon">
+                  <Lock size={16} className="field-icon" />
+                  <input 
+                    type="password" 
+                    required 
+                    placeholder="Confirm new password" 
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+
+                {newPassword && (
+                  <div className="pw-strength-bar">
+                    <div className={`meter ${newPassword.length >= 8 ? "strong" : newPassword.length >= 6 ? "medium" : "weak"}`} />
+                    <small>Strength: {newPassword.length >= 8 ? "Strong" : newPassword.length >= 6 ? "Medium" : "Weak"}</small>
+                  </div>
+                )}
+
+                <button type="submit" className="lime-button full">
+                  Update access key <Check size={17} strokeWidth={2.6} />
+                </button>
+              </form>
+            </motion.div>
+          )}
+
+          {step === "success" && (
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="modal-step success-step">
+              <div className="success-check-orb">
+                <Check size={36} strokeWidth={3} />
+              </div>
+              <div className="modal-badge lime">ACCESS RESTORED</div>
+              <h3>Key updated successfully!</h3>
+              <p>Your password has been changed. You can now use your new access key to sign in.</p>
+              <button onClick={onClose} className="lime-button full">
+                Return to sign in <ArrowUpRight size={17} />
+              </button>
+            </motion.div>
+          )}
+        </motion.div>
+      </div>
+    </AnimatePresence>
+  );
+}
+
 function Auth({ registerMode=false }: { registerMode?:boolean }) {
   const nav = useNavigate();
   const [role, setRole] = useState<UserRole>(() => {
@@ -812,6 +1273,22 @@ function Auth({ registerMode=false }: { registerMode?:boolean }) {
   });
   const [customName, setCustomName] = useState("");
   const [customEmail, setCustomEmail] = useState("");
+  const [password, setPassword] = useState("password123");
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const roleDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (roleDropdownRef.current && !roleDropdownRef.current.contains(e.target as Node)) {
+        setRoleDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleEnter = () => {
     const selectedRole = role;
@@ -840,27 +1317,81 @@ function Auth({ registerMode=false }: { registerMode?:boolean }) {
       nav("/home");
     }
   };
+
+  const panelEase = [0.16, 1, 0.3, 1] as const;
+  const panelVariants = {
+    hidden: {
+      opacity: 0,
+      x: 70,
+      clipPath: "inset(0% 0% 0% 100% round 20px)",
+    },
+    show: {
+      opacity: 1,
+      x: 0,
+      clipPath: "inset(0% 0% 0% 0% round 20px)",
+      transition: {
+        duration: 0.9,
+        ease: panelEase,
+        staggerChildren: 0.08,
+        delayChildren: 0.12,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 14, x: 12 },
+    show: {
+      opacity: 1,
+      y: 0,
+      x: 0,
+      transition: { duration: 0.55, ease: panelEase },
+    },
+  };
   
   return (
     <div className="auth-page">
       <div className="auth-visual">
-        <Logo />
+        <div className="auth-visual-top">
+          <Logo />
+          <div className="auth-live-badge">
+            <span className="live-ping-dot" />
+            <span>SYSTEM LIVE</span>
+          </div>
+        </div>
+
         <motion.div 
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          className="auth-visual-copy"
         >
           <div className="eyebrow"><SignalBar /> DHAKA · CIVIC OPERATIONS LAYER</div>
-          <h1>Log the signal.<br /><em>Move the city.</em></h1>
+          <h1>Log the signal.<br /><span className="text-lime">Move the city.</span></h1>
           <p>A shared operating layer for residents, ward officers, dispatch teams, and drivers.</p>
+
+          <div className="auth-feature-pills">
+            <div className="feature-pill">
+              <span className="pill-dot lime" />
+              <span>Real-time fill signals</span>
+            </div>
+            <div className="feature-pill">
+              <span className="pill-dot cyan" />
+              <span>Automated route sequencing</span>
+            </div>
+            <div className="feature-pill">
+              <span className="pill-dot coral" />
+              <span>Accountable civic response</span>
+            </div>
+          </div>
         </motion.div>
+
         <div className="auth-bottom">
           18.4 km <small>avoided in today’s model route</small>
         </div>
       </div>
       
       <div className="auth-form-wrap">
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}>
+        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }}>
           <Link to="/" className="auth-back-link">
             <span className="back-arrow">←</span> 
             <b>Return to SafaiTrack</b>
@@ -869,66 +1400,189 @@ function Auth({ registerMode=false }: { registerMode?:boolean }) {
         
         <motion.div 
           className="auth-form"
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
+          variants={panelVariants}
+          initial="hidden"
+          animate="show"
         >
-          <span className="overline">{registerMode ? "CREATE ACCESS" : "SECURE ACCESS"}</span>
-          <h2>{registerMode ? "Join the response layer." : "Welcome back to the ward."}</h2>
-          <p className="auth-subtitle">{registerMode ? "Choose how you’ll help make the handoff visible." : "Sign in to continue where the street needs you."}</p>
+          <motion.div variants={itemVariants} className="auth-header-row">
+            <span className="access-layer-badge">
+              <span className="access-dot" /> ACCESS LAYER
+            </span>
+            <div className="key-icon-box" title="Protected Access">
+              <Key size={17} />
+            </div>
+          </motion.div>
+
+          <motion.div variants={itemVariants}>
+            <h2>
+              {registerMode ? "Join the response layer." : "Welcome back."}
+              <br />
+              <span className="purpose-highlight">Move with purpose.</span>
+            </h2>
+            <p className="auth-subtitle">
+              {registerMode 
+                ? "Choose how you’ll help make civic handoffs visible." 
+                : "Sign in to pick up the next useful signal in your ward."}
+            </p>
+          </motion.div>
           
           <div className="form-fields">
             {registerMode && (
-              <motion.label initial={{opacity:0, x:-10}} animate={{opacity:1, x:0}} transition={{delay: 0.2}}>
-                Your name
-                <input 
-                  value={customName}
-                  onChange={e => setCustomName(e.target.value)}
-                  placeholder="e.g. Kabir Hossain" 
-                />
-              </motion.label>
+              <motion.div variants={itemVariants} className="field-group">
+                <label>Your name</label>
+                <div className="input-with-icon">
+                  <User size={17} className="field-icon" />
+                  <input 
+                    value={customName}
+                    onChange={e => setCustomName(e.target.value)}
+                    placeholder="e.g. Kabir Hossain" 
+                  />
+                </div>
+              </motion.div>
             )}
+
+            <motion.div variants={itemVariants} className="field-group">
+              <label>Email address</label>
+              <div className="input-with-icon">
+                <Mail size={17} className="field-icon" />
+                <input 
+                  type="email" 
+                  value={customEmail}
+                  onChange={e => setCustomEmail(e.target.value)}
+                  placeholder={DEMO_PROFILES[role]?.email || "you@municipality.gov.bd"} 
+                />
+              </div>
+            </motion.div>
             
-            <motion.label initial={{opacity:0, x:-10}} animate={{opacity:1, x:0}} transition={{delay: 0.3}}>
-              Role
-              <select value={role} onChange={e => setRole(e.target.value as UserRole)}>
-                <option value="Citizen">Citizen</option>
-                <option value="Truck Driver">Truck Driver</option>
-                <option value="Ward Officer">Ward Officer</option>
-                <option value="City Admin">City Admin</option>
-              </select>
-            </motion.label>
-            
-            <motion.label initial={{opacity:0, x:-10}} animate={{opacity:1, x:0}} transition={{delay: 0.4}}>
-              Email address
-              <input 
-                type="email" 
-                value={customEmail}
-                onChange={e => setCustomEmail(e.target.value)}
-                placeholder={DEMO_PROFILES[role]?.email || "name@dhakacity.gov.bd"} 
-              />
-            </motion.label>
-            
-            <motion.label initial={{opacity:0, x:-10}} animate={{opacity:1, x:0}} transition={{delay: 0.5}}>
-              Password
-              <input type="password" placeholder="••••••••" defaultValue="password123" />
-            </motion.label>
+            <motion.div variants={itemVariants} className="field-group">
+              <label>Password</label>
+              <div className="input-with-icon">
+                <Lock size={17} className="field-icon" />
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="Enter your access key" 
+                />
+                <button 
+                  type="button" 
+                  className="password-toggle-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
+            </motion.div>
+
+            {/* Remember me & Forgot Password */}
+            <motion.div variants={itemVariants} className="auth-utility-row">
+              <label className="remember-checkbox-label">
+                <input 
+                  type="checkbox" 
+                  checked={rememberMe} 
+                  onChange={e => setRememberMe(e.target.checked)} 
+                />
+                <span className="checkbox-custom">
+                  {rememberMe && <Check size={12} strokeWidth={3.5} />}
+                </span>
+                <span className="remember-text">Remember this device</span>
+              </label>
+
+              <button 
+                type="button" 
+                className="forgot-password-link"
+                onClick={() => setShowForgotModal(true)}
+              >
+                Forgot password?
+              </button>
+            </motion.div>
+
+            {/* Access as dropdown */}
+            <motion.div variants={itemVariants} className="field-group">
+              <label>Access as</label>
+              <div className="role-selector-box" ref={roleDropdownRef}>
+                <div className="role-current-display">
+                  <span className="role-badge-icon">
+                    {role === "Ward Officer" ? <Shield size={22} /> : role === "Truck Driver" ? <Truck size={22} /> : role === "Citizen" ? <User size={22} /> : <Sparkles size={22} />}
+                  </span>
+                  <span className="role-current-label">{role}</span>
+                </div>
+                <button 
+                  type="button" 
+                  className="role-select-arrow-btn"
+                  onClick={() => setRoleDropdownOpen(prev => !prev)}
+                  aria-label="Toggle role dropdown"
+                  aria-expanded={roleDropdownOpen}
+                >
+                  <ChevronRight size={22} strokeWidth={2.5} className={`role-select-chevron ${roleDropdownOpen ? "open" : ""}`} />
+                </button>
+
+                <AnimatePresence>
+                  {roleDropdownOpen && (
+                    <motion.div 
+                      className="role-dropdown-menu"
+                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                      transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                    >
+                      {([
+                        { name: "Ward Officer", icon: <Shield size={20} /> },
+                        { name: "Truck Driver", icon: <Truck size={20} /> },
+                        { name: "Citizen", icon: <User size={20} /> },
+                        { name: "City Admin", icon: <Sparkles size={20} /> },
+                      ] as const).map(item => (
+                        <button
+                          key={item.name}
+                          type="button"
+                          className={`role-dropdown-item ${role === item.name ? "selected" : ""}`}
+                          onClick={() => {
+                            setRole(item.name as UserRole);
+                            setRoleDropdownOpen(false);
+                          }}
+                        >
+                          <span className="dropdown-item-icon">{item.icon}</span>
+                          <span className="dropdown-item-text">{item.name}</span>
+                          {role === item.name && <Check size={18} strokeWidth={2.8} className="dropdown-item-check" />}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.div>
             
             <motion.button 
+              variants={itemVariants}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              initial={{opacity:0, y:15}} animate={{opacity:1, y:0}} transition={{delay: 0.6}}
               onClick={handleEnter} 
-              className="lime-button full"
+              className="lime-button full open-access-btn"
             >
-              {registerMode ? "Create account" : "Enter system"} <ArrowUpRight size={17} strokeWidth={2.5}/>
+              {registerMode ? "Create access layer" : "Open access layer"} <ArrowUpRight size={22} strokeWidth={2.6}/>
             </motion.button>
           </div>
           
-          <div className="auth-switch">
-            {registerMode ? "Already have access?" : "Need an account?"} <Link to={registerMode ? "/login" : "/register"}>{registerMode ? "Sign in" : "Register here"}</Link>
-          </div>
+          <motion.div variants={itemVariants} className="civic-workspace-footer">
+            <span className="workspace-line" />
+            <span className="workspace-text">PROTECTED CIVIC WORKSPACE</span>
+            <span className="workspace-line" />
+          </motion.div>
+
+          <motion.div variants={itemVariants} className="auth-switch">
+            {registerMode ? "Already have access?" : "Need an account?"}{" "}
+            <Link to={registerMode ? "/login" : "/register"}>
+              {registerMode ? "Sign in" : "Register here"}
+            </Link>
+          </motion.div>
         </motion.div>
+
+        <ForgotPasswordModal 
+          isOpen={showForgotModal} 
+          onClose={() => setShowForgotModal(false)} 
+          defaultEmail={customEmail || DEMO_PROFILES[role]?.email}
+        />
       </div>
     </div>
   );
