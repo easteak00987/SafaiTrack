@@ -248,3 +248,40 @@ gh pr create --base main --head easteak/frontend \
 
 **Next steps:**
 - Hero image background (safaitrack-hero_ab8e9511.webp) is missing from local public/manus-storage ó fix by replacing with hosted or local image.
+
+---
+
+## 2026-09-08 | Auth, Report & Complaints Redesign + Bugfixes
+
+**Who:** Easteak Ahmed
+
+**What I did:**
+- **Login / Auth Page:**
+  - Integrated local hero image background (safaitrack-hero_ab8e9511.webp) on the auth visual side.
+  - Scaled up "Return to SafaiTrack" back link with bold typography, arrow glide animation, and clean contrast.
+  - Overhauled typography across all labels, inputs, and headings to be sharper, bolder, and more spacious.
+  - Refactored .input-with-icon to flexbox layout with lign-items: center to ensure Mail and Lock icons and text/password dots share the exact same horizontal center line.
+  - Eliminated legacy CSS collision where .input-with-icon svg forced position: absolute; top: 22px; left: 13px; color: var(--coral), which had previously displaced the password eye toggle into the bottom-right corner.
+  - Redesigned "Access as" role selector: text and badge icon are now display labels, and the dropdown is triggered exclusively by clicking the chevron arrow button (>), which animates open/down and reveals an interactive floating role selection menu.
+- **Report Issue Page (/citizen/report):**
+  - Enlarged "‚Üê Back to complaints" back link (20px bold font, smooth arrow glide).
+  - Scaled main headline (Log what the street is telling you.) to ultra-bold 900 display clamp (up to 68px) with coral highlight.
+  - Enlarged sub-headline to 22px font with comfortable reading line-height.
+  - Completely de-congested the form card: increased padding to 48px 52px, 32px vertical field gaps, 19px extra-bold labels.
+  - Replaced native category select with custom 60px styled container and custom ChevronDown arrow.
+  - Fixed MapPin icon overlap on location field using clean flexbox alignment.
+  - Expanded textarea to 150px min-height with comfortable padding and focus ring.
+  - Made the photo upload box fully clickable anywhere: added real file attachment input (ccept="image/*"), file thumbnail preview, file size/name display, and a remove button.
+  - Scaled action footer: 16px privacy assurance notice and 20px 900-weight "Submit signal" lime button.
+- **Complaint Trail Page (/citizen/complaints):**
+  - Scaled main headline (Complaint trail.) to 900 ultra-bold display clamp (up to 68px).
+  - Scaled sub-headline to 22px font.
+  - Upgraded "Report an issue" action button to 18px font with bold styling and hover lift.
+  - Redesigned filter tabs into modern pill tabs with active highlights and numerical count badges.
+  - De-congested complaint card grid: 28px grid gap, 36px 40px internal card padding, 26px bold titles, 17px descriptions, high-contrast reference and status badges, and animated diagonal arrows on audit links.
+- **Sidebar Cleanup:**
+  - Removed "Model synced 2m ago" indicator from the sidebar footer.
+
+**Files changed:**
+- client/src/App.tsx - Role dropdown logic, file upload state & preview in ReportPage, upgraded ComplaintsPage structure, removed sidebar sync status.
+- client/src/index.css - All styling overrides for Auth page inputs, Report page de-congestion, and Complaints trail redesign.
