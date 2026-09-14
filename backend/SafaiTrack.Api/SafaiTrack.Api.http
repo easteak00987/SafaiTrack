@@ -1,0 +1,6 @@
+@SafaiTrack.Api_HostAddress = http://localhost:5281
+
+GET {{SafaiTrack.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
