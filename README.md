@@ -137,25 +137,33 @@ Open `http://localhost:5173` in your browser.
 
 ### Backend Setup
 
-> Backend setup instructions will be added once the API foundation (Milestone 1 backend) is complete.
-
 ```bash
 cd backend/SafaiTrack.Api
 dotnet restore
-dotnet run
+dotnet run --launch-profile http
 ```
 
-Swagger UI will be available at `http://localhost:5000/swagger` (or your configured port).
+- API Server: `http://localhost:5281`
+- Swagger UI: `http://localhost:5281/swagger`
+- Database: Microsoft SQL Server (`SafaiTrackDb` on `localhost\SQLEXPRESS`)
+
+### Running the End-to-End Automated Test Suite
+
+A comprehensive 23-test PowerShell suite verifies JWT auth, role violations, bins CRUD, citizen data isolation, complaint resolution, Held-Karp route generation, and driver execution:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\backend\SafaiTrack.Api\comprehensive_test_day3.ps1
+```
 
 ### Environment Variables and Secrets
 
-JWT signing keys and connection strings are **never committed to source control**. Use `dotnet user-secrets` locally for the backend, and a `.env` file (excluded via `.gitignore`) for any frontend secrets.
+JWT signing keys and connection strings are managed via `appsettings.Development.json` for local development. In production, use environment variables or secret vaults.
 
 ---
 
-## Development Roadmap
+## Development Roadmap & Audit
 
-See [`OVERALL_PLAN.md`](./OVERALL_PLAN.md) for the full milestone breakdown, and [`WORK_DONE.md`](./WORK_DONE.md) for a running log of completed work.
+See [`WORK_DONE.md`](./WORK_DONE.md) for the detailed, honest technical summary of the 5-day integration sprint, architecture decisions, and test verification results.
 
 ---
 
