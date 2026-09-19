@@ -62,6 +62,7 @@ public class RouteOptimizationResultDto
 
 public class RouteSummaryDto
 {
+    public double? DistanceAvoidedKm { get; set; }
     public int RouteId { get; set; }
     public int WardId { get; set; }
     public string? WardName { get; set; }

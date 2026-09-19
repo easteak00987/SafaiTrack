@@ -18,10 +18,16 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Truck> Trucks => Set<Truck>();
     public DbSet<Route> Routes => Set<Route>();
     public DbSet<RouteStop> RouteStops => Set<RouteStop>();
+    public DbSet<ComplaintUpdate> ComplaintUpdates => Set<ComplaintUpdate>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.Entity<ApplicationUser>().HasOne(u => u.Ward).WithMany()
+            .HasForeignKey(u => u.WardId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<ComplaintUpdate>().HasOne(u => u.Complaint).WithMany()
+            .HasForeignKey(u => u.ComplaintId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<ComplaintUpdate>().Property(u => u.Message).HasMaxLength(1000);
 
         // Configure Ward
         builder.Entity<Ward>(entity =>

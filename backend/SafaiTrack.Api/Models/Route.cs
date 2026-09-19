@@ -6,6 +6,7 @@ public class Route
     public int WardId { get; set; }
     public string Algorithm { get; set; } = string.Empty;
     public double TotalDistanceKm { get; set; }
+    public double? NaiveDistanceKm { get; set; }
     public string Status { get; set; } = "Planned"; // "Planned", "InProgress", "Completed"
     public int? TruckId { get; set; }
     public string? DriverId { get; set; }

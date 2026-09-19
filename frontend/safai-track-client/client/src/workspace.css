@@ -1,0 +1,448 @@
+.ws {
+  color: #183d3e;
+  background: #f5f7f8;
+  min-height: 100vh;
+  font:
+    15px/1.5 Inter,
+    sans-serif;
+  letter-spacing: 0;
+  display: flex;
+}
+.ws * {
+  box-sizing: border-box;
+  letter-spacing: 0;
+}
+.ws h1 {
+  font-size: 30px;
+  line-height: 1.25;
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.ws h2 {
+  font-size: 21px;
+  margin: 24px 0 14px;
+}
+.ws p {
+  margin: 12px 0;
+}
+.ws-sidebar {
+  width: 238px;
+  flex: 0 0 238px;
+  background: #143c3d;
+  color: #fff;
+  padding: 28px 20px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.ws-brand {
+  font-size: 24px;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: none;
+}
+.ws-role {
+  color: #c9ed67;
+  font-size: 13px;
+}
+.ws nav {
+  display: grid;
+  gap: 6px;
+  margin-top: 24px;
+}
+.ws nav a {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  color: #e0ebeb;
+  border-radius: 5px;
+  text-decoration: none;
+}
+.ws nav a.active,
+.ws nav a:hover {
+  background: #315556;
+  color: #d4f477;
+}
+.ws-account {
+  margin-top: auto;
+  padding-top: 32px;
+  display: grid;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.ws-account small {
+  color: #c2d4d4;
+}
+.ws-account button {
+  color: #fff;
+  border-color: #587879;
+  background: transparent;
+}
+.ws-main {
+  flex: 1;
+  min-width: 0;
+}
+.ws-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 21px 32px;
+  border-bottom: 1px solid #dbe2e3;
+  background: #fff;
+  font-size: 13px;
+}
+.ws-content {
+  max-width: 1350px;
+  margin: 0 auto;
+  padding: 32px;
+}
+.ws-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.ws-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ws button,
+.ws .primary,
+.ws-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  min-height: 42px;
+  border: 1px solid #becdce;
+  border-radius: 5px;
+  background: #fff;
+  color: #183d3e;
+  font:
+    600 14px/1.4 Inter,
+    sans-serif;
+  cursor: pointer;
+  text-decoration: none;
+}
+.ws button:hover,
+.ws-button:hover {
+  background: #eef5f5;
+}
+.ws .primary {
+  background: #c9ed67;
+  border-color: #abc952;
+  color: #163b24;
+}
+.ws button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.ws label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.ws input,
+.ws select,
+.ws textarea {
+  font:
+    400 15px/1.5 Inter,
+    sans-serif;
+  color: #183d3e;
+  background: #fff;
+  padding: 10px 12px;
+  border: 1px solid #b8c8cb;
+  border-radius: 5px;
+  width: 100%;
+  min-width: 0;
+}
+.ws textarea {
+  resize: vertical;
+}
+.ws input:focus,
+.ws select:focus,
+.ws textarea:focus,
+.ws button:focus-visible,
+.ws a:focus-visible {
+  outline: 3px solid #7abbe1;
+  outline-offset: 2px;
+}
+.ws-form {
+  display: grid;
+  gap: 18px;
+  max-width: 620px;
+  margin: 24px 0;
+}
+.ws-form button {
+  justify-self: start;
+}
+.ws-error {
+  color: #932e2e;
+  background: #fff0ee;
+  padding: 14px;
+  border-left: 3px solid #c74940;
+  margin: 14px 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.ws-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin: 24px 0;
+}
+.ws-metrics > div {
+  border: 1px solid #dce4e5;
+  border-top: 3px solid #39898c;
+  padding: 20px;
+  background: #fff;
+  border-radius: 4px;
+}
+.ws-metrics > div:nth-child(2) {
+  border-top-color: #e6ab45;
+}
+.ws-metrics > div:nth-child(3) {
+  border-top-color: #78a748;
+}
+.ws-metrics span {
+  display: block;
+  color: #536b70;
+}
+.ws-metrics strong {
+  display: block;
+  font-size: 32px;
+  margin-top: 8px;
+}
+.ws-list {
+  border-top: 1px solid #d6e0e1;
+  margin: 16px 0;
+}
+.ws-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 8px;
+  border-bottom: 1px solid #d6e0e1;
+  text-decoration: none;
+  color: inherit;
+  flex-wrap: wrap;
+}
+.ws-row > div:first-child {
+  flex: 1;
+}
+.ws-row small,
+.ws-timeline small {
+  display: block;
+  color: #61777b;
+  font-size: 12px;
+  margin-top: 5px;
+}
+.ws-row label {
+  width: 90px;
+}
+.ws-status {
+  display: inline-flex;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #e8edf0;
+  color: #465e68;
+  white-space: nowrap;
+}
+.ws-status.pending,
+.ws-status.planned {
+  background: #fff0d4;
+  color: #805916;
+}
+.ws-status.inprogress,
+.ws-status.onroute {
+  background: #e2effb;
+  color: #21567e;
+}
+.ws-status.resolved,
+.ws-status.completed,
+.ws-status.collected,
+.ws-status.available {
+  background: #e3f2e7;
+  color: #285e39;
+}
+.ws-status.maintenance {
+  background: #fce4e2;
+  color: #8b3830;
+}
+.ws-timeline > div,
+.ws-timeline > p {
+  padding: 16px;
+  border-left: 3px solid #71a2a3;
+  margin: 0 0 12px;
+  background: #fff;
+}
+.ws-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ws-dispatch {
+  padding: 0 0 24px;
+  border-bottom: 1px solid #d6e0e1;
+  margin-bottom: 24px;
+}
+.ws-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.ws-dispatch > label {
+  max-width: 420px;
+  margin: 14px 0;
+}
+.ws-grow {
+  flex: 1;
+  min-width: 140px;
+}
+.ws-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #ddebef;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+}
+.collection-map {
+  height: 440px;
+  width: 100%;
+  z-index: 0;
+  border: 1px solid #c8d6d9;
+  border-radius: 5px;
+  background: #e8edef;
+}
+.collection-marker {
+  background: #176b91;
+  color: #fff;
+  border: 2px solid white;
+  border-radius: 5px;
+  text-align: center;
+  line-height: 26px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 1px 5px #0005;
+}
+.collection-marker.collected {
+  background: #398252;
+}
+.collection-marker.depot {
+  background: #183d3e;
+}
+.ws .map-caption {
+  font-size: 12px;
+  color: #536b70;
+}
+.ws-auth {
+  justify-content: center;
+  align-items: center;
+  padding: 30px;
+  min-height: 100vh;
+  background: #edf3f4;
+}
+.ws-auth form {
+  width: 100%;
+  max-width: 430px;
+  display: grid;
+  gap: 22px;
+  padding: 32px;
+  border: 1px solid #d5e0e1;
+  border-radius: 8px;
+  background: white;
+}
+.ws-auth a {
+  color: #276c79;
+}
+.ws-empty {
+  padding: 28px 0;
+  color: #61777b;
+}
+@media (max-width: 800px) {
+  .ws {
+    display: block;
+  }
+  .ws-sidebar {
+    width: 100%;
+    min-height: 0;
+    padding: 18px;
+  }
+  .ws nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 10px;
+  }
+  .ws nav a {
+    padding: 8px;
+    font-size: 13px;
+  }
+  .ws-account {
+    padding-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .ws-account small {
+    display: none;
+  }
+  .ws-account button {
+    margin-left: auto;
+  }
+  .ws-top {
+    padding: 14px 18px;
+  }
+  .ws-top span:last-child {
+    display: none;
+  }
+  .ws-content {
+    padding: 22px 18px;
+  }
+  .ws h1 {
+    font-size: 26px;
+  }
+  .ws-metrics {
+    gap: 8px;
+  }
+  .ws-metrics > div {
+    padding: 12px;
+  }
+  .ws-metrics span {
+    font-size: 12px;
+  }
+  .ws-metrics strong {
+    font-size: 27px;
+  }
+  .ws-fields {
+    grid-template-columns: 1fr;
+  }
+  .collection-map {
+    height: 340px;
+  }
+  .ws-auth {
+    display: flex;
+  }
+  .ws-row {
+    gap: 12px;
+  }
+  .ws-heading {
+    align-items: flex-start;
+  }
+  .ws-auth form {
+    padding: 24px;
+  }
+}

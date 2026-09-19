@@ -125,6 +125,8 @@ app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/", () => Results.Redirect("/swagger"));
+
 app.MapControllers();
 
 // Attempt seeding if database is reachable

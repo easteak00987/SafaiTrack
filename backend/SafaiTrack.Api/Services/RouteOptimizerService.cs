@@ -210,6 +210,7 @@ public class RouteOptimizerService : IRouteOptimizerService
     {
         var depot = customDepot ?? (DefaultDepot.lat, DefaultDepot.lon);
         var N = bins.Count;
+        if (N > 14) return ComputeNearestNeighborRoute(bins, customDepot);
 
         // Memoized search using tuple key (uIdx, mask) -> (cost, path)
         var memo = new Dictionary<(int uIdx, int mask), (double cost, List<int> path)>();

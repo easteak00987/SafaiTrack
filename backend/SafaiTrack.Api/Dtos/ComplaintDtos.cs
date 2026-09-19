@@ -18,6 +18,8 @@ public class CreateComplaintDto
 
 public class UpdateComplaintStatusDto
 {
+    [MaxLength(1000)]
+    public string? Message { get; set; }
     [Required]
     public string Status { get; set; } = string.Empty; // "Pending", "InProgress", "Resolved"
 }

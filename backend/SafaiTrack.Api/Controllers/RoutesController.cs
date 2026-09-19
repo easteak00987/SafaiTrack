@@ -1,3 +1,5 @@
+using System.Data;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,209 +11,146 @@ using Route = SafaiTrack.Api.Models.Route;
 
 namespace SafaiTrack.Api.Controllers;
 
-[Authorize]
+[Authorize(Roles = "Admin,WardOfficer,Driver")]
 [ApiController]
-[Route("api/[controller]")]
-public class RoutesController : ControllerBase
+[Route("api/routes")]
+public class RoutesController(ApplicationDbContext db, IRouteOptimizerService optimizer) : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
-    private readonly IRouteOptimizerService _optimizer;
-
-    public RoutesController(ApplicationDbContext context, IRouteOptimizerService optimizer)
+    private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+    private async Task<IQueryable<Route>> ScopedRoutes()
     {
-        _context = context;
-        _optimizer = optimizer;
+        var query = db.Routes.AsQueryable();
+        if (User.IsInRole("Driver")) return query.Where(r => r.DriverId == UserId);
+        if (User.IsInRole("WardOfficer"))
+        {
+            var user = await db.Users.FindAsync(UserId);
+            return query.Where(r => r.WardId == user!.WardId);
+        }
+        return query;
     }
-
-    [Authorize(Roles = "Admin")]
+    private static IQueryable<Route> Details(IQueryable<Route> query) => query
+        .Include(r => r.Ward).Include(r => r.Truck).Include(r => r.Driver)
+        .Include(r => r.RouteStops).ThenInclude(s => s.Bin);
+    private static RouteSummaryDto Summary(Route r) => new()
+    {
+        RouteId = r.RouteId, WardId = r.WardId, WardName = r.Ward?.Name,
+        Algorithm = r.Algorithm, TotalDistanceKm = r.TotalDistanceKm, Status = r.Status,
+        DistanceAvoidedKm = r.NaiveDistanceKm.HasValue ? Math.Max(0, r.NaiveDistanceKm.Value - r.TotalDistanceKm) : null,
+        TruckId = r.TruckId, TruckPlate = r.Truck?.PlateNumber,
+        DriverId = r.DriverId, DriverName = r.Driver?.FullName, CreatedAt = r.CreatedAt,
+        StopsCount = r.RouteStops.Count, CollectedStopsCount = r.RouteStops.Count(s => s.CollectedAt != null),
+        Stops = r.RouteStops.OrderBy(s => s.StopSequence).Select(s => new OptimizedRouteStopDto
+        {
+            RouteStopId = s.RouteStopId, BinId = s.BinId, WardId = r.WardId,
+            Name = s.Bin!.Name, Latitude = s.Bin.Latitude, Longitude = s.Bin.Longitude,
+            CurrentFillPercent = s.Bin.CurrentFillPercent, StopSequence = s.StopSequence, CollectedAt = s.CollectedAt
+        }).ToList()
+    };
+    [HttpGet]
+    public async Task<IActionResult> List([FromQuery] int? wardId)
+    {
+        var query = await ScopedRoutes();
+        if (wardId.HasValue) query = query.Where(r => r.WardId == wardId);
+        var routes = await Details(query).AsNoTracking().OrderByDescending(r => r.CreatedAt).ToListAsync();
+        return Ok(routes.Select(Summary));
+    }
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> GetRoute(int id)
+    {
+        var route = await Details(await ScopedRoutes()).AsNoTracking().FirstOrDefaultAsync(r => r.RouteId == id);
+        return route == null ? NotFound() : Ok(Summary(route));
+    }
+    [Authorize(Roles = "Admin,WardOfficer")]
     [HttpPost("generate")]
-    public async Task<ActionResult<RouteOptimizationResultDto>> GenerateRoute([FromBody] GenerateRouteDto dto)
+    public async Task<IActionResult> Generate(GenerateRouteDto dto)
     {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(ModelState);
-        }
-
-        var ward = await _context.Wards.FindAsync(dto.WardId);
-        if (ward == null)
-        {
-            return BadRequest(new { message = $"Ward with ID {dto.WardId} does not exist." });
-        }
-
-        var bins = await _context.Bins
-            .Where(b => b.WardId == dto.WardId)
-            .OrderBy(b => b.BinId)
-            .ToListAsync();
-
-        if (bins.Count == 0)
-        {
-            return BadRequest(new { message = $"Ward with ID {dto.WardId} has no bins configured." });
-        }
-
-        RouteOptimizationResultDto result = dto.Algorithm.ToLowerInvariant() switch
-        {
-            "nearest_neighbor" => _optimizer.ComputeNearestNeighborRoute(bins),
-            _ => _optimizer.ComputeDijkstraRoute(bins)
-        };
-
-        // Persist the generated route
-        var route = new Route
-        {
-            WardId = dto.WardId,
-            Algorithm = result.Algorithm,
-            TotalDistanceKm = result.TotalDistanceKm,
-            Status = "Planned",
-            TruckId = dto.TruckId,
-            DriverId = dto.DriverId,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        await _context.Routes.AddAsync(route);
-        await _context.SaveChangesAsync();
-
-        var routeStops = result.OrderedStops.Select(s => new RouteStop
-        {
-            RouteId = route.RouteId,
-            BinId = s.BinId,
-            StopSequence = s.StopSequence
-        }).ToList();
-
-        await _context.RouteStops.AddRangeAsync(routeStops);
-        await _context.SaveChangesAsync();
-
-        // Populate database IDs into the result DTO
-        result.RouteId = route.RouteId;
-        result.WardId = route.WardId;
-        result.Status = route.Status;
-        result.TruckId = route.TruckId;
-        result.DriverId = route.DriverId;
-        result.CreatedAt = route.CreatedAt;
-
-        for (var i = 0; i < result.OrderedStops.Count; i++)
-        {
-            result.OrderedStops[i].RouteStopId = routeStops[i].RouteStopId;
-        }
-
-        return CreatedAtAction(nameof(GetRoute), new { id = route.RouteId }, result);
+        var user = await db.Users.FindAsync(UserId);
+        if (User.IsInRole("WardOfficer") && user!.WardId != dto.WardId) return Forbid();
+        var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == dto.DriverId && u.Role == "Driver" && u.WardId == dto.WardId);
+        if (driver == null) return BadRequest(new { message = "Select a driver assigned to this ward." });
+        // Reserve the driver, truck, and bins atomically across concurrent dispatches.
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var truck = await db.Trucks.FindAsync(dto.TruckId);
+        if (truck == null || truck.Status != "Available") return BadRequest(new { message = "Select an available truck." });
+        if (await db.Routes.AnyAsync(r => r.Status != "Completed" && (r.DriverId == dto.DriverId || r.TruckId == dto.TruckId)))
+            return Conflict(new { message = "This driver or truck already has an unfinished route." });
+        var bins = await db.Bins.Where(b => b.WardId == dto.WardId &&
+            (b.CurrentFillPercent > 60 || db.Complaints.Any(c => c.BinId == b.BinId && c.Status != "Resolved")) &&
+            !db.RouteStops.Any(s => s.BinId == b.BinId && s.Route!.Status != "Completed" && s.Route.DriverId != null))
+            .OrderBy(b => b.BinId).ToListAsync();
+        if (bins.Count == 0) return BadRequest(new { message = "No unassigned bins need collection in this ward." });
+        var result = dto.Algorithm == "nearest_neighbor" ? optimizer.ComputeNearestNeighborRoute(bins) : optimizer.ComputeDijkstraRoute(bins);
+        var route = new Route { WardId = dto.WardId, DriverId = driver.Id, TruckId = truck.TruckId,
+            Algorithm = result.Algorithm, TotalDistanceKm = result.TotalDistanceKm, NaiveDistanceKm = result.NaiveDistanceKm,
+            RouteStops = result.OrderedStops.Select(s => new RouteStop { BinId = s.BinId, StopSequence = s.StopSequence }).ToList() };
+        db.Routes.Add(route);
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return CreatedAtAction(nameof(GetRoute), new { id = route.RouteId }, new { route.RouteId });
     }
-
-    [HttpGet("{id}")]
-    public async Task<ActionResult<RouteSummaryDto>> GetRoute(int id)
+    [HttpPut("{id:int}/optimize")]
+    public async Task<IActionResult> Optimize(int id)
     {
-        var route = await _context.Routes
-            .Include(r => r.Ward)
-            .Include(r => r.Truck)
-            .Include(r => r.Driver)
-            .Include(r => r.RouteStops)
-                .ThenInclude(rs => rs.Bin)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.RouteId == id);
-
-        if (route == null)
-        {
-            return NotFound(new { message = $"Route with ID {id} not found." });
-        }
-
-        var stops = route.RouteStops
-            .OrderBy(rs => rs.StopSequence)
-            .Select(rs => new OptimizedRouteStopDto
-            {
-                RouteStopId = rs.RouteStopId,
-                BinId = rs.BinId,
-                WardId = rs.Bin?.WardId ?? route.WardId,
-                Name = rs.Bin?.Name ?? $"Bin {rs.BinId}",
-                Latitude = rs.Bin?.Latitude ?? 0,
-                Longitude = rs.Bin?.Longitude ?? 0,
-                CurrentFillPercent = rs.Bin?.CurrentFillPercent ?? 0,
-                StopSequence = rs.StopSequence,
-                CollectedAt = rs.CollectedAt
-            })
-            .ToList();
-
-        var summary = new RouteSummaryDto
-        {
-            RouteId = route.RouteId,
-            WardId = route.WardId,
-            WardName = route.Ward?.Name,
-            Algorithm = route.Algorithm,
-            TotalDistanceKm = route.TotalDistanceKm,
-            Status = route.Status,
-            TruckId = route.TruckId,
-            TruckPlate = route.Truck?.PlateNumber,
-            DriverId = route.DriverId,
-            DriverName = route.Driver?.FullName,
-            CreatedAt = route.CreatedAt,
-            StopsCount = stops.Count,
-            CollectedStopsCount = stops.Count(s => s.CollectedAt != null),
-            Stops = stops
-        };
-
-        return Ok(summary);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var route = await Details(await ScopedRoutes()).FirstOrDefaultAsync(r => r.RouteId == id);
+        if (route == null) return NotFound();
+        if (route.Status != "Planned") return Conflict(new { message = "Only a planned route can be optimized." });
+        var result = optimizer.ComputeDijkstraRoute(route.RouteStops.Select(s => s.Bin!).ToList());
+        foreach (var stop in route.RouteStops) stop.StopSequence = result.OrderedStops.Single(s => s.BinId == stop.BinId).StopSequence;
+        route.Algorithm = result.Algorithm;
+        route.TotalDistanceKm = result.TotalDistanceKm;
+        route.NaiveDistanceKm ??= result.NaiveDistanceKm;
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return Ok(Summary(route));
     }
-
-    [Authorize(Roles = "Driver,Admin")]
-    [HttpPut("{id}/start")]
-    public async Task<ActionResult<object>> StartRoute(int id)
+    [Authorize(Roles = "Driver")]
+    [HttpPut("{id:int}/start")]
+    public async Task<IActionResult> Start(int id)
     {
-        var route = await _context.Routes.FindAsync(id);
-        if (route == null)
-        {
-            return NotFound(new { message = $"Route with ID {id} not found." });
-        }
-
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var route = await Details(await ScopedRoutes()).FirstOrDefaultAsync(r => r.RouteId == id);
+        if (route == null) return NotFound();
+        if (route.Status != "Planned" || route.Truck?.Status != "Available" || route.RouteStops.Count == 0)
+            return Conflict(new { message = "This route is not ready to start." });
         route.Status = "InProgress";
-        await _context.SaveChangesAsync();
-
-        return Ok(new { message = "Route started.", routeId = route.RouteId, status = route.Status });
+        route.Truck.Status = "OnRoute";
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return Ok(Summary(route));
     }
-
-    [Authorize(Roles = "Driver,Admin")]
-    [HttpPut("{id}/stops/{stopId}/collect")]
-    public async Task<ActionResult<object>> CollectStop(int id, int stopId)
+    [Authorize(Roles = "Driver")]
+    [HttpPut("{id:int}/stops/{stopId:int}/collect")]
+    public async Task<IActionResult> Collect(int id, int stopId)
     {
-        var routeStop = await _context.RouteStops
-            .Include(rs => rs.Bin)
-            .FirstOrDefaultAsync(rs => rs.RouteId == id && rs.RouteStopId == stopId);
-
-        if (routeStop == null)
-        {
-            return NotFound(new { message = $"Stop with ID {stopId} not found on route {id}." });
-        }
-
-        routeStop.CollectedAt = DateTime.UtcNow;
-
-        // Optionally empty the bin upon collection
-        if (routeStop.Bin != null)
-        {
-            routeStop.Bin.CurrentFillPercent = 0;
-            routeStop.Bin.LastUpdated = DateTime.UtcNow;
-        }
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            message = "Stop collected.",
-            routeId = id,
-            stopId = routeStop.RouteStopId,
-            binId = routeStop.BinId,
-            collectedAt = routeStop.CollectedAt
-        });
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var route = await Details(await ScopedRoutes()).FirstOrDefaultAsync(r => r.RouteId == id);
+        if (route == null) return NotFound();
+        var stop = route.RouteStops.FirstOrDefault(s => s.RouteStopId == stopId);
+        if (stop == null) return NotFound();
+        if (route.Status != "InProgress" || stop.CollectedAt != null ||
+            route.RouteStops.Any(s => s.StopSequence < stop.StopSequence && s.CollectedAt == null))
+            return Conflict(new { message = "Start the route and collect the next outstanding stop in order." });
+        stop.CollectedAt = DateTime.UtcNow;
+        stop.Bin!.CurrentFillPercent = 0;
+        stop.Bin.LastUpdated = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return Ok(Summary(route));
     }
-
-    [Authorize(Roles = "Driver,Admin")]
-    [HttpPut("{id}/complete")]
-    public async Task<ActionResult<object>> CompleteRoute(int id)
+    [Authorize(Roles = "Driver")]
+    [HttpPut("{id:int}/complete")]
+    public async Task<IActionResult> Complete(int id)
     {
-        var route = await _context.Routes.FindAsync(id);
-        if (route == null)
-        {
-            return NotFound(new { message = $"Route with ID {id} not found." });
-        }
-
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var route = await Details(await ScopedRoutes()).FirstOrDefaultAsync(r => r.RouteId == id);
+        if (route == null) return NotFound();
+        if (route.Status != "InProgress" || route.RouteStops.Any(s => s.CollectedAt == null))
+            return Conflict(new { message = "Collect every stop before completing this route." });
         route.Status = "Completed";
-        await _context.SaveChangesAsync();
-
-        return Ok(new { message = "Route completed.", routeId = route.RouteId, status = route.Status });
+        if (route.Truck != null) route.Truck.Status = "Available";
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return Ok(Summary(route));
     }
 }

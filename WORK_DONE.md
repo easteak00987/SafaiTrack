@@ -88,3 +88,9 @@ Run against live Web API on `http://localhost:5281`:
 
 ### 5.2 TypeScript Build
 - Executed `npm run check` (`tsc --noEmit`): Clean exit with **0 errors**.
+
+## 6. Role Workspace Repair - 19 September 2026
+
+Replaced the shared demo dashboards with authenticated citizen, driver, ward officer, and admin workspaces. Added backend ownership/ward/assignment enforcement, officer replies with a stored complaint timeline, real route dispatch and collection, geographic maps, and recorded metrics. Removed role switching and automatic demo login; sign-out and browser Back are guarded.
+
+See [Role Workspaces](dev_log/ROLE_WORKSPACES.md) for the access matrix, migrations, running instructions, verification, and remaining proposal work. The new integration suite verifies 49 API assertions and all four browser workflows using temporary fixtures without modifying existing operational data.

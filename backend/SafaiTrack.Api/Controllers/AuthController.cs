@@ -12,7 +12,7 @@ namespace SafaiTrack.Api.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
-    private static readonly string[] AllowedRoles = ["Citizen", "Admin", "Driver", "WardOfficer"];
+    private static readonly string[] AllowedRoles = ["Citizen"];
 
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
@@ -139,6 +139,7 @@ public class AuthController : ControllerBase
             user.Email,
             user.FullName,
             user.Role,
+            user.WardId,
             Claims = User.Claims.Select(c => new { c.Type, c.Value })
         });
     }

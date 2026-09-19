@@ -7,7 +7,7 @@ using SafaiTrack.Api.Models;
 
 namespace SafaiTrack.Api.Controllers;
 
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "Admin,WardOfficer")]
 [ApiController]
 [Route("api/[controller]")]
 public class TrucksController : ControllerBase
@@ -57,6 +57,7 @@ public class TrucksController : ControllerBase
         });
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<ActionResult<TruckResponseDto>> CreateTruck([FromBody] CreateTruckDto dto)
     {
@@ -86,6 +87,7 @@ public class TrucksController : ControllerBase
         return CreatedAtAction(nameof(GetTruck), new { id = truck.TruckId }, responseDto);
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPut("{id}")]
     public async Task<ActionResult<TruckResponseDto>> UpdateTruck(int id, [FromBody] UpdateTruckDto dto)
     {
@@ -100,6 +102,14 @@ public class TrucksController : ControllerBase
             return NotFound(new { message = $"Truck with ID {id} not found." });
         }
 
+        if (!string.IsNullOrWhiteSpace(dto.PlateNumber))
+        {
+            if (await _context.Routes.AnyAsync(r => r.TruckId == id && r.Status != "Completed"))
+                return Conflict(new { message = "Finish the assigned route before changing this truck." });
+        }
+        if (!string.IsNullOrWhiteSpace(dto.Status) && await _context.Routes.AnyAsync(r => r.TruckId == id && r.Status != "Completed"))
+            return Conflict(new { message = "Finish the assigned route before changing this truck." });
+        if (dto.Status == "OnRoute") return BadRequest(new { message = "A truck enters OnRoute when its driver starts a route." });
         if (!string.IsNullOrWhiteSpace(dto.PlateNumber))
         {
             truck.PlateNumber = dto.PlateNumber;

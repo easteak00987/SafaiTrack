@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SafaiTrack.Api.Data;
 
@@ -11,9 +12,11 @@ using SafaiTrack.Api.Data;
 namespace SafaiTrack.Api.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260919004748_RoleWorkspacesAndComplaintUpdates")]
+    partial class RoleWorkspacesAndComplaintUpdates
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -369,9 +372,6 @@ namespace SafaiTrack.Api.Migrations
 
                     b.Property<string>("DriverId")
                         .HasColumnType("nvarchar(450)");
-
-                    b.Property<double?>("NaiveDistanceKm")
-                        .HasColumnType("float");
 
                     b.Property<string>("Status")
                         .IsRequired()

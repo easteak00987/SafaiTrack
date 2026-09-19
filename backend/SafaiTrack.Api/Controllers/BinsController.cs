@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SafaiTrack.Api.Data;
@@ -23,6 +24,11 @@ public class BinsController : ControllerBase
     public async Task<ActionResult<IEnumerable<BinResponseDto>>> GetBins([FromQuery] int? wardId)
     {
         var query = _context.Bins.Include(b => b.Ward).AsNoTracking();
+        if (User.IsInRole("WardOfficer") || User.IsInRole("Driver"))
+        {
+            var user = await _context.Users.FindAsync(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            query = query.Where(b => b.WardId == user!.WardId);
+        }
 
         if (wardId.HasValue)
         {
@@ -59,6 +65,8 @@ public class BinsController : ControllerBase
             return NotFound(new { message = $"Bin with ID {id} not found." });
         }
 
+        if ((User.IsInRole("WardOfficer") || User.IsInRole("Driver")) &&
+            bin.WardId != (await _context.Users.FindAsync(User.FindFirstValue(ClaimTypes.NameIdentifier)))?.WardId) return Forbid();
         return Ok(new BinResponseDto
         {
             BinId = bin.BinId,
@@ -117,7 +125,7 @@ public class BinsController : ControllerBase
         return CreatedAtAction(nameof(GetBin), new { id = bin.BinId }, responseDto);
     }
 
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,WardOfficer")]
     [HttpPut("{id}")]
     public async Task<ActionResult<BinResponseDto>> UpdateBin(int id, [FromBody] UpdateBinDto dto)
     {
@@ -132,6 +140,11 @@ public class BinsController : ControllerBase
             return NotFound(new { message = $"Bin with ID {id} not found." });
         }
 
+        if (User.IsInRole("WardOfficer"))
+        {
+            var officer = await _context.Users.FindAsync(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            if (bin.WardId != officer?.WardId || (dto.WardId.HasValue && dto.WardId != officer.WardId)) return Forbid();
+        }
         if (dto.WardId.HasValue && dto.WardId.Value != bin.WardId)
         {
             var wardExists = await _context.Wards.AnyAsync(w => w.WardId == dto.WardId.Value);

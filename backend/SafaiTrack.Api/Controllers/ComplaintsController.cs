@@ -8,7 +8,7 @@ using SafaiTrack.Api.Models;
 
 namespace SafaiTrack.Api.Controllers;
 
-[Authorize]
+[Authorize(Roles = "Citizen,Admin,WardOfficer")]
 [ApiController]
 [Route("api/[controller]")]
 public class ComplaintsController : ControllerBase
@@ -37,6 +37,11 @@ public class ComplaintsController : ControllerBase
         if (!isStaff)
         {
             query = query.Where(c => c.CitizenId == userId);
+        }
+        if (User.IsInRole("WardOfficer"))
+        {
+            var officer = await _context.Users.FindAsync(userId);
+            query = query.Where(c => c.Bin!.WardId == officer!.WardId);
         }
 
         var complaints = await query
@@ -80,6 +85,8 @@ public class ComplaintsController : ControllerBase
         {
             return Forbid();
         }
+        if (User.IsInRole("WardOfficer") && complaint.Bin?.WardId != (await _context.Users.FindAsync(userId))?.WardId)
+            return Forbid();
 
         return Ok(new ComplaintResponseDto
         {
@@ -96,6 +103,7 @@ public class ComplaintsController : ControllerBase
         });
     }
 
+    [Authorize(Roles = "Citizen")]
     [HttpPost]
     public async Task<ActionResult<ComplaintResponseDto>> CreateComplaint([FromBody] CreateComplaintDto dto)
     {
@@ -173,6 +181,15 @@ public class ComplaintsController : ControllerBase
             return NotFound(new { message = $"Complaint with ID {id} not found." });
         }
 
+        var actor = await _context.Users.FindAsync(User.FindFirstValue(ClaimTypes.NameIdentifier));
+        if (User.IsInRole("WardOfficer") && complaint.Bin?.WardId != actor?.WardId) return Forbid();
+        if (matchingStatus != complaint.Status && !((complaint.Status == "Pending" && matchingStatus == "InProgress") ||
+            (complaint.Status == "InProgress" && matchingStatus == "Resolved")))
+            return Conflict(new { message = "Complaints progress from Pending to InProgress to Resolved." });
+        if (matchingStatus == complaint.Status && string.IsNullOrWhiteSpace(dto.Message))
+            return BadRequest(new { message = "Enter a reply or change the status." });
+        _context.ComplaintUpdates.Add(new ComplaintUpdate { ComplaintId = id, AuthorId = actor!.Id,
+            AuthorName = actor.FullName, Status = matchingStatus, Message = dto.Message?.Trim() ?? "Status updated." });
         complaint.Status = matchingStatus;
         if (matchingStatus == "Resolved")
         {
@@ -198,5 +215,17 @@ public class ComplaintsController : ControllerBase
             CreatedAt = complaint.CreatedAt,
             ResolvedAt = complaint.ResolvedAt
         });
+    }
+
+    [HttpGet("{id}/updates")]
+    public async Task<IActionResult> Updates(int id)
+    {
+        var complaint = await _context.Complaints.Include(c => c.Bin).FirstOrDefaultAsync(c => c.ComplaintId == id);
+        if (complaint == null) return NotFound();
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (User.IsInRole("Citizen") && complaint.CitizenId != userId) return Forbid();
+        if (User.IsInRole("WardOfficer") && complaint.Bin!.WardId != (await _context.Users.FindAsync(userId))?.WardId) return Forbid();
+        return Ok(await _context.ComplaintUpdates.Where(u => u.ComplaintId == id).OrderBy(u => u.CreatedAt)
+            .Select(u => new { u.ComplaintUpdateId, u.AuthorName, u.Status, u.Message, u.CreatedAt }).ToListAsync());
     }
 }
