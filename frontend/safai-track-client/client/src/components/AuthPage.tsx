@@ -1,28 +1,91 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowUpRight,
+  Check,
+  ChevronRight,
   Eye,
   EyeOff,
   Key,
   Lock,
   Mail,
+  Shield,
+  Sparkles,
+  Truck,
   User,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { apiClient, apiError } from "../lib/api-client";
+import { type UserRole } from "../lib/headerData";
+
+const ROLE_PRESETS: Record<
+  UserRole,
+  { email: string; name: string; backendRole: string }
+> = {
+  "Ward Officer": {
+    email: "officer08@safaitrack.local",
+    name: "Tariq Officer",
+    backendRole: "WardOfficer",
+  },
+  "Truck Driver": {
+    email: "driver01@safaitrack.local",
+    name: "Karim Driver",
+    backendRole: "Driver",
+  },
+  "Citizen": {
+    email: "citizen01@safaitrack.local",
+    name: "Rahim Citizen",
+    backendRole: "Citizen",
+  },
+  "City Admin": {
+    email: "admin@safaitrack.local",
+    name: "Test Admin",
+    backendRole: "Admin",
+  },
+};
 
 export default function AuthPage({ register = false }: { register?: boolean }) {
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+
+  const [role, setRole] = useState<UserRole>(() => {
+    const stored = (typeof localStorage !== "undefined" ? localStorage.getItem("safaitrack_active_role") : null) as UserRole | null;
+    return stored && ROLE_PRESETS[stored] ? stored : "Citizen";
+  });
+  const [name, setName] = useState(ROLE_PRESETS[role]?.name || "");
+  const [email, setEmail] = useState(ROLE_PRESETS[role]?.email || "");
+  const [password, setPassword] = useState("Password123");
   const [showPassword, setShowPassword] = useState(false);
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const roleDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (roleDropdownRef.current && !roleDropdownRef.current.contains(e.target as Node)) {
+        setRoleDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelectRole = (newRole: UserRole) => {
+    setRole(newRole);
+    setRoleDropdownOpen(false);
+    setEmail(ROLE_PRESETS[newRole].email);
+    setName(ROLE_PRESETS[newRole].name);
+    setPassword("Password123");
+    setError("");
+  };
+
   if (isAuthenticated) return <Navigate to="/home" replace />;
 
   const ease = [0.16, 1, 0.3, 1] as const;
+
   return (
     <div className="auth-page">
       <div className="auth-visual">
@@ -98,26 +161,27 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
           transition={{ duration: 0.6, ease }}
           onSubmit={async event => {
             event.preventDefault();
-            const fields = new FormData(event.currentTarget);
             setBusy(true);
             setError("");
             try {
-              const email = String(fields.get("email")).trim();
+              const emailToUse = email.trim();
+              const backendRole = ROLE_PRESETS[role].backendRole;
               const { data } = await apiClient.post(
                 `/api/auth/${register ? "register" : "login"}`,
                 {
-                  email,
-                  password: fields.get("password"),
+                  email: emailToUse,
+                  password,
                   ...(register
-                    ? { fullName: fields.get("name"), role: "Citizen" }
+                    ? { fullName: name.trim() || ROLE_PRESETS[role].name, role: backendRole }
                     : {}),
                 }
               );
               login(data.token, {
                 fullName: data.fullName,
-                email,
+                email: emailToUse,
                 role: data.role,
               });
+              localStorage.setItem("safaitrack_active_role", role);
               navigate("/home", { replace: true });
             } catch (err) {
               setError(apiError(err));
@@ -142,7 +206,7 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
             </h2>
             <p className="auth-subtitle">
               {register
-                ? "Create your citizen account to report and track local issues."
+                ? "Choose how you’ll help make civic handoffs visible."
                 : "Sign in to pick up the next useful signal in your ward."}
             </p>
           </div>
@@ -155,6 +219,8 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
                   <input
                     id="auth-name"
                     name="name"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
                     required
                     maxLength={120}
                     autoComplete="name"
@@ -171,6 +237,8 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
                   id="auth-email"
                   name="email"
                   type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
                   required
                   autoComplete="username"
                   placeholder="you@example.com"
@@ -185,6 +253,8 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
                   id="auth-password"
                   name="password"
                   type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
                   required
                   minLength={register ? 6 : 1}
                   autoComplete={register ? "new-password" : "current-password"}
@@ -200,6 +270,79 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
                 </button>
               </div>
             </div>
+
+            {/* Access as dropdown */}
+            <div className="field-group">
+              <label>Access as</label>
+              <div className="role-selector-box" ref={roleDropdownRef}>
+                <div className="role-current-display">
+                  <span className="role-badge-icon">
+                    {role === "Ward Officer" ? (
+                      <Shield size={22} />
+                    ) : role === "Truck Driver" ? (
+                      <Truck size={22} />
+                    ) : role === "Citizen" ? (
+                      <User size={22} />
+                    ) : (
+                      <Sparkles size={22} />
+                    )}
+                  </span>
+                  <span className="role-current-label">{role}</span>
+                </div>
+                <button
+                  type="button"
+                  className="role-select-arrow-btn"
+                  onClick={() => setRoleDropdownOpen(prev => !prev)}
+                  aria-label="Toggle role dropdown"
+                  aria-expanded={roleDropdownOpen}
+                >
+                  <ChevronRight
+                    size={22}
+                    strokeWidth={2.5}
+                    className={`role-select-chevron ${roleDropdownOpen ? "open" : ""}`}
+                  />
+                </button>
+
+                <AnimatePresence>
+                  {roleDropdownOpen && (
+                    <motion.div
+                      className="role-dropdown-menu"
+                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                      transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                    >
+                      {(
+                        [
+                          { name: "Ward Officer", icon: <Shield size={20} /> },
+                          { name: "Truck Driver", icon: <Truck size={20} /> },
+                          { name: "Citizen", icon: <User size={20} /> },
+                          { name: "City Admin", icon: <Sparkles size={20} /> },
+                        ] as const
+                      ).map(item => (
+                        <button
+                          key={item.name}
+                          type="button"
+                          className={`role-dropdown-item ${role === item.name ? "selected" : ""}`}
+                          onClick={() => handleSelectRole(item.name)}
+                        >
+                          <span className="dropdown-item-icon">{item.icon}</span>
+                          <span className="dropdown-item-text">{item.name}</span>
+                          {role === item.name && (
+                            <Check
+                              size={18}
+                              strokeWidth={2.8}
+                              className="dropdown-item-check"
+                            />
+                          )}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
             {error && (
               <div
                 className="auth-error-banner"
