@@ -41,10 +41,12 @@ public class Invoice
 
 public static class InvoiceStatus
 {
+    public const string AwaitingApproval = "AwaitingApproval";
+    public const string ReviewHold = "ReviewHold";
     public const string Unpaid = "Unpaid";
     public const string Processing = "Processing";
     public const string Paid = "Paid";
     public const string Cancelled = "Cancelled";
 
-    public static readonly string[] All = [Unpaid, Processing, Paid, Cancelled];
+    public static readonly string[] All = [Unpaid, Processing, Paid, Cancelled, AwaitingApproval, ReviewHold];
 }

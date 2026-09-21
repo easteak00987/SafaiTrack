@@ -14,7 +14,7 @@ namespace SafaiTrack.Api.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
-    private static readonly string[] AllowedRoles = ["Citizen", "Admin", "Driver", "WardOfficer"];
+    private static readonly string[] AllowedRoles = ["Citizen", "Driver", "WardOfficer"];
 
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
@@ -66,7 +66,7 @@ public class AuthController : ControllerBase
 
         // Canonical casing for role
         var canonicalRole = AllowedRoles.First(r => r.Equals(dto.Role, StringComparison.OrdinalIgnoreCase));
-        var isStaff = canonicalRole is "WardOfficer" or "Driver";
+
 
         if (canonicalRole == "WardOfficer")
         {
@@ -81,7 +81,7 @@ public class AuthController : ControllerBase
             }
         }
 
-        var status = isStaff ? "PendingApproval" : "Active";
+        var status = "PendingApproval";
 
         var rawPhone = dto.PhoneNumber?.Trim() ?? "";
         var formattedPhone = rawPhone.StartsWith("+88") ? rawPhone : (rawPhone.StartsWith("88") ? $"+{rawPhone}" : $"+88{rawPhone}");
@@ -118,32 +118,23 @@ public class AuthController : ControllerBase
         }
         await _userManager.AddToRoleAsync(user, canonicalRole);
 
-        if (isStaff)
-        {
-            return Ok(new AuthResponseDto
-            {
-                Token = string.Empty,
-                FullName = user.FullName,
-                Role = user.Role,
-                Status = "PendingApproval",
-                Message = "Your registration has been submitted and is pending admin approval."
-            });
-        }
-
-        var (token, expiresAt) = _tokenService.GenerateToken(user);
-
-        return Ok(new AuthResponseDto
-        {
-            Token = token,
-            FullName = user.FullName,
-            Role = user.Role,
-            Status = "Active",
-            ExpiresAt = expiresAt
-        });
+        var adminIds = await _db.Users.Where(u => u.Role == "Admin" && u.Status == "Active").Select(u => u.Id).ToListAsync();
+        _db.Notifications.AddRange(adminIds.Select(id => new Notification {
+            UserId = id, Title = "Registration awaiting approval", Category = "info", Link = "/admin/approvals",
+            Message = $"{user.FullName} applied as {user.Role}. Review their registration."
+        }));
+        await _db.SaveChangesAsync();
+        return Ok(new AuthResponseDto { Token = string.Empty, FullName = user.FullName, Role = user.Role,
+            Status = "PendingApproval", Message = "Your registration is awaiting City Admin approval." });
     }
 
     [HttpPost("login")]
-    public async Task<ActionResult<AuthResponseDto>> Login([FromBody] LoginDto dto)
+    public Task<ActionResult<AuthResponseDto>> Login([FromBody] LoginDto dto) => Authenticate(dto, false);
+
+    [HttpPost("city-admin/login")]
+    public Task<ActionResult<AuthResponseDto>> CityAdminLogin([FromBody] LoginDto dto) => Authenticate(dto, true);
+
+    private async Task<ActionResult<AuthResponseDto>> Authenticate(LoginDto dto, bool cityAdmin)
     {
         if (!ModelState.IsValid)
         {
@@ -171,9 +162,12 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Invalid email or password." });
         }
 
-        if (user.Status == "PendingApproval")
+        if (cityAdmin != (user.Role == "Admin"))
+            return StatusCode(403, new { message = cityAdmin ? "This entrance is for City Admin accounts." : "Please use the separate City Admin sign-in page." });
+
+        if (user.Status != "Active")
         {
-            return Unauthorized(new { message = "Your registration is pending admin approval.", status = "PendingApproval" });
+            return Unauthorized(new { message = user.Status == "Rejected" ? "Your registration was declined." : "Your registration is pending City Admin approval.", status = user.Status });
         }
 
         var (token, expiresAt) = _tokenService.GenerateToken(user);
@@ -228,7 +222,7 @@ public class AuthController : ControllerBase
             {
                 u.Id,
                 u.FullName,
-                u.Email,
+                u.Email, u.PhoneNumber, u.Gender, u.WardId,
                 u.Role,
                 u.Status,
                 u.RequestedWardId,
@@ -245,11 +239,13 @@ public class AuthController : ControllerBase
         var user = await _userManager.FindByIdAsync(id);
         if (user == null) return NotFound(new { message = "User not found." });
 
+        if (user.Status != "PendingApproval") return Conflict(new { message = "This application has already been reviewed." });
         user.Status = "Active";
 
-        if (user.Role == "WardOfficer")
+        if (user.Role is "WardOfficer" or "Citizen")
         {
-            var targetWardId = dto?.WardId ?? user.RequestedWardId;
+            var targetWardId = dto?.WardId ?? user.RequestedWardId ?? user.WardId;
+            if (!targetWardId.HasValue) return BadRequest(new { message = "Select a ward for this account." });
             if (targetWardId.HasValue)
             {
                 var wardExists = await _db.Wards.AnyAsync(w => w.WardId == targetWardId.Value);
@@ -287,15 +283,10 @@ public class AuthController : ControllerBase
         var user = await _userManager.FindByIdAsync(id);
         if (user == null) return NotFound(new { message = "User not found." });
 
-        var userRoles = await _db.UserRoles.Where(ur => ur.UserId == id).ToListAsync();
-        _db.UserRoles.RemoveRange(userRoles);
-
-        var result = await _userManager.DeleteAsync(user);
-        if (!result.Succeeded)
-        {
-            return BadRequest(new { message = "Failed to delete user." });
-        }
-
-        return Ok(new { message = "User application rejected and account deleted." });
+        if (user.Status != "PendingApproval") return Conflict(new { message = "This application has already been reviewed." });
+        user.Status = "Rejected";
+        var result = await _userManager.UpdateAsync(user);
+        if (!result.Succeeded) return BadRequest(new { message = "Failed to decline application." });
+        return Ok(new { message = "Application declined. Its account record has been retained." });
     }
 }

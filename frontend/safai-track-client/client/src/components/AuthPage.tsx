@@ -43,13 +43,13 @@ export function missingPasswordRequirements(password: string): string[] {
   ].filter((requirement): requirement is string => typeof requirement === "string");
 }
 
-export default function AuthPage({ register = false }: { register?: boolean }) {
+export default function AuthPage({ register = false, cityAdmin = false }: { register?: boolean; cityAdmin?: boolean }) {
   const { login, isAuthenticated, initializing } = useAuth();
   const navigate = useNavigate();
 
   const [role, setRole] = useState<UserRole>(() => {
     const stored = (typeof localStorage !== "undefined" ? localStorage.getItem("safaitrack_active_role") : null) as UserRole | null;
-    return stored && ROLE_PRESETS[stored] ? stored : "Citizen";
+    return cityAdmin ? "City Admin" : stored && stored !== "City Admin" && ROLE_PRESETS[stored] ? stored : "Citizen";
   });
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -185,7 +185,7 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
               return;
             }
             const backendRole = ROLE_PRESETS[role].backendRole;
-            if (register && backendRole === "WardOfficer" && !requestedWardId) {
+            if (register && (backendRole === "WardOfficer" || backendRole === "Citizen") && !requestedWardId) {
               setError("Which ward are you applying for? Please select a ward.");
               return;
             }
@@ -194,7 +194,7 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
             try {
               const emailToUse = email.trim();
               const { data } = await apiClient.post(
-                `/api/auth/${register ? "register" : "login"}`,
+                `/api/auth/${register ? "register" : cityAdmin ? "city-admin/login" : "login"}`,
                 {
                   email: emailToUse,
                   password,
@@ -204,7 +204,7 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
                         phoneNumber: phone.trim(),
                         gender,
                         role: backendRole,
-                        ...(backendRole === "WardOfficer" ? { requestedWardId: Number(requestedWardId) } : {}),
+                        ...(backendRole === "WardOfficer" ? { requestedWardId: Number(requestedWardId) } : backendRole === "Citizen" ? { wardId: Number(requestedWardId) } : {}),
                       }
                     : {}),
                 }
@@ -237,7 +237,7 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
           </div>
           <div>
             <h2>
-              {register ? "Join the response layer." : "Welcome back."}
+              {cityAdmin ? "City Admin" : register ? "Join the response layer." : "Welcome back."}
               <br />
               <span className="purpose-highlight">Move with purpose.</span>
             </h2>
@@ -425,7 +425,7 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
               )}
 
               {/* Access as dropdown */}
-              <div className="field-group">
+              {!cityAdmin && <div className="field-group">
                 <label>Access as</label>
                 <div className="role-selector-box" ref={roleDropdownRef}>
                   <div className="role-current-display">
@@ -470,7 +470,6 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
                             { name: "Ward Officer", icon: <Shield size={20} /> },
                             { name: "Truck Driver", icon: <Truck size={20} /> },
                             { name: "Citizen", icon: <User size={20} /> },
-                            { name: "City Admin", icon: <Sparkles size={20} /> },
                           ] as const
                         ).map(item => (
                           <button
@@ -494,12 +493,12 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
                     )}
                   </AnimatePresence>
                 </div>
-              </div>
+              </div>}
 
-              {register && role === "Ward Officer" && (
+              {register && (role === "Ward Officer" || role === "Citizen") && (
                 <div className="field-group">
                   <label htmlFor="auth-ward">
-                    Which ward are you applying for? <span style={{ color: "#d9534f" }}>*</span>
+                    Your service ward <span style={{ color: "#d9534f" }}>*</span>
                   </label>
                   <select
                     id="auth-ward"
@@ -566,12 +565,12 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
             <span className="workspace-text">PROTECTED CIVIC WORKSPACE</span>
             <span className="workspace-line" />
           </div>
-          <div className="auth-switch">
+          {!cityAdmin && <div className="auth-switch">
             {register ? "Already have access?" : "Need an account?"}{" "}
             <Link to={register ? "/login" : "/register"}>
               {register ? "Sign in" : "Register here"}
             </Link>
-          </div>
+          </div>}
         </motion.form>
       </div>
     </div>

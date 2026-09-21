@@ -1,3 +1,4 @@
+import { PeopleDirectory, PaymentsAndWages, PaymentApprovals, DriverWages } from "./components/CityAdministration";
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import {
   Link,
@@ -26,6 +27,7 @@ import {
   RefreshCw,
   Shield,
   Truck,
+  Users,
   Wallet,
   X,
 } from "lucide-react";
@@ -160,7 +162,7 @@ const money = (amount: number, currency = "BDT") =>
 function Status({ value }: { value: string }) {
   return (
     <span className={`ws-status ${value.toLowerCase()}`}>
-      {value === "InProgress" ? "In progress" : value === "AwaitingAcceptance" ? "Awaiting acceptance" : value}
+      {value === "AwaitingApproval" ? "Awaiting confirmation" : value === "ReviewHold" ? "Review required" : value === "InProgress" ? "In progress" : value === "AwaitingAcceptance" ? "Awaiting acceptance" : value}
     </span>
   );
 }
@@ -228,7 +230,7 @@ function Shell() {
         ]
       : []),
     ...(user?.role === "Driver"
-      ? [{ to: "/driver/route", label: "My routes", icon: Navigation }]
+      ? [{ to: "/driver/route", label: "My routes", icon: Navigation }, { to: "/driver/wages", label: "My wages", icon: Wallet }]
       : []),
     ...(staff
       ? [
@@ -249,9 +251,13 @@ function Shell() {
       : []),
     ...(user?.role === "Admin"
       ? [
+          { to: "/admin/drivers", label: "Truck drivers", icon: Truck },
+          { to: "/admin/officers", label: "Ward officers", icon: Shield },
+          { to: "/admin/citizens", label: "Citizens", icon: Users },
+          { to: "/admin/payments-wages", label: "Payments & wages", icon: Wallet },
           {
             to: "/operations/approvals",
-            label: "Pending approvals",
+            label: "Approvals",
             icon: Shield,
           },
         ]
@@ -1395,6 +1401,9 @@ interface PendingUser {
   status: string;
   requestedWardId: number | null;
   requestedWardName: string | null;
+  wardId: number | null;
+  phoneNumber: string | null;
+  gender: string | null;
 }
 
 function PendingApprovals() {
@@ -1411,13 +1420,13 @@ function PendingApprovals() {
     setSuccess("");
     try {
       const wardId =
-        user.role === "WardOfficer"
+        (user.role === "WardOfficer" || user.role === "Citizen")
           ? (selectedWards[user.id] !== undefined && selectedWards[user.id] !== ""
               ? Number(selectedWards[user.id])
-              : user.requestedWardId)
+              : user.requestedWardId ?? user.wardId)
           : (selectedWards[user.id] ? Number(selectedWards[user.id]) : null);
 
-      if (user.role === "WardOfficer" && !wardId) {
+      if ((user.role === "WardOfficer" || user.role === "Citizen") && !wardId) {
         setError(`Please select an assigned ward for officer ${user.fullName}.`);
         setBusy(false);
         return;
@@ -1436,7 +1445,7 @@ function PendingApprovals() {
   };
 
   const handleReject = async (user: PendingUser) => {
-    if (!window.confirm(`Are you sure you want to reject and remove the registration for ${user.fullName}?`)) {
+    if (!window.confirm(`Are you sure you want to decline the registration for ${user.fullName}?`)) {
       return;
     }
     setBusy(true);
@@ -1444,7 +1453,7 @@ function PendingApprovals() {
     setSuccess("");
     try {
       await apiClient.delete(`/api/auth/pending-approvals/${user.id}/reject`);
-      setSuccess(`Rejected and removed application for ${user.fullName}.`);
+      setSuccess(`Declined application for ${user.fullName}.`);
       await resource.reload();
     } catch (err) {
       setError(apiError(err));
@@ -1455,7 +1464,7 @@ function PendingApprovals() {
 
   return (
     <>
-      <Heading title="Pending Staff Approvals" />
+      <Heading title="Registration approvals" />
       <ErrorBox message={resource.error || error} retry={resource.reload} />
       {success && (
         <div style={{ padding: "0.75rem 1rem", borderRadius: 8, background: "#ecfdf5", border: "1px solid #10b981", color: "#065f46", marginBottom: "1rem" }}>
@@ -1464,7 +1473,7 @@ function PendingApprovals() {
       )}
       {resource.loading && <p>Loading pending accounts...</p>}
       {!resource.loading && (!resource.data || resource.data.length === 0) && (
-        <p className="ws-empty">No pending staff registrations requiring approval.</p>
+        <p className="ws-empty">No pending registrations requiring approval.</p>
       )}
       <div className="ws-list">
         {resource.data?.map(u => (
@@ -1472,7 +1481,7 @@ function PendingApprovals() {
             <div>
               <div style={{ fontWeight: 600, fontSize: "1.05rem" }}>{u.fullName}</div>
               <div style={{ color: "#64748b", fontSize: "0.875rem" }}>
-                {u.email} &bull; <span style={{ fontWeight: 500, color: "#1e293b" }}>{roleNames[u.role] || u.role}</span>
+                {u.email} · {u.phoneNumber || "No mobile"} · {u.gender || "Gender not provided"} &bull; <span style={{ fontWeight: 500, color: "#1e293b" }}>{roleNames[u.role] || u.role}</span>
               </div>
               {u.role === "WardOfficer" && (
                 <div style={{ fontSize: "0.85rem", color: "#0284c7", marginTop: 4 }}>
@@ -1493,7 +1502,7 @@ function PendingApprovals() {
                   value={
                     selectedWards[u.id] !== undefined
                       ? selectedWards[u.id]
-                      : (u.requestedWardId ? String(u.requestedWardId) : "")
+                      : ((u.requestedWardId ?? u.wardId) ? String(u.requestedWardId ?? u.wardId) : "")
                   }
                   onChange={e =>
                     setSelectedWards(prev => ({
@@ -1672,7 +1681,7 @@ function CitizenBilling() {
               <Status
                 value={invoice.isOverdue ? "Overdue" : invoice.status}
               />
-              {invoice.status !== "Paid" && invoice.status !== "Cancelled" && (
+              {(invoice.status === "Unpaid" || invoice.status === "Processing") && (
                 <button
                   className="ws-pay"
                   disabled={paying !== null}
@@ -1866,6 +1875,7 @@ export default function WorkspaceRoutes({
     <Routes>
       <Route path="/" element={landing} />
       <Route path="/login" element={<Login />} />
+      <Route path="/city-admin/login" element={<Login cityAdmin />} />
       <Route path="/register" element={<Login register />} />
       <Route element={<Guard />}>
         <Route element={<Shell />}>
@@ -1883,6 +1893,7 @@ export default function WorkspaceRoutes({
             <Route path="/citizen/report" element={<Report />} />
           </Route>
           <Route element={<Guard roles={["Driver"]} />}>
+            <Route path="/driver/wages" element={<DriverWages />} />
             <Route path="/driver/dashboard" element={<Dashboard />} />
             <Route path="/driver/route" element={<RouteList />} />
             <Route path="/driver/route/:id" element={<RouteDetail />} />
@@ -1895,6 +1906,10 @@ export default function WorkspaceRoutes({
             />
           </Route>
           <Route element={<Guard roles={["Admin"]} />}>
+            <Route path="/admin/drivers" element={<PeopleDirectory key="drivers" role="Driver" />} />
+            <Route path="/admin/officers" element={<PeopleDirectory key="officers" role="WardOfficer" />} />
+            <Route path="/admin/citizens" element={<PeopleDirectory key="citizens" role="Citizen" />} />
+            <Route path="/admin/payments-wages" element={<PaymentsAndWages />} />
             <Route path="/admin/dashboard" element={<Dashboard />} />
             <Route path="/admin/complaints" element={<Complaints />} />
             <Route path="/admin/complaints/:id" element={<ComplaintDetail />} />
@@ -1902,8 +1917,8 @@ export default function WorkspaceRoutes({
             <Route path="/admin/routes" element={<RouteList />} />
             <Route path="/admin/routes/:id" element={<RouteDetail />} />
             <Route path="/admin/fleet" element={<Fleet />} />
-            <Route path="/operations/approvals" element={<PendingApprovals />} />
-            <Route path="/admin/approvals" element={<PendingApprovals />} />
+            <Route path="/operations/approvals" element={<><PendingApprovals /><PaymentApprovals /></>} />
+            <Route path="/admin/approvals" element={<><PendingApprovals /><PaymentApprovals /></>} />
           </Route>
           <Route element={<Guard roles={["Admin", "WardOfficer"]} />}>
             <Route path="/operations/complaints" element={<Complaints />} />

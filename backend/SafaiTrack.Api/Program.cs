@@ -201,6 +201,9 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+builder.Services.Configure<PayrollOptions>(builder.Configuration.GetSection("Payroll"));
+builder.Services.AddScoped<PayrollService>();
+
 var app = builder.Build();
 
 app.Logger.LogInformation(
@@ -257,6 +260,9 @@ using (var scope = app.Services.CreateScope())
             else
             {
                 await context.Database.EnsureCreatedAsync();
+                using var upgradeStream = typeof(ApplicationDbContext).Assembly.GetManifestResourceStream("SafaiTrack.Api.Data.CityAdministration.SqlServer.sql")!;
+                using var upgradeReader = new StreamReader(upgradeStream);
+                await context.Database.ExecuteSqlRawAsync(await upgradeReader.ReadToEndAsync());
             }
 
             await DbSeeder.SeedAsync(context, userManager, roleManager);

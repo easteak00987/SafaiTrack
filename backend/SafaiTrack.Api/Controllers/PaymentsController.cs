@@ -114,6 +114,8 @@ public class PaymentsController : ControllerBase
             return Forbid();
         }
 
+        if (await _context.Payments.AnyAsync(p => p.InvoiceId == invoice.InvoiceId && p.Status == PaymentStatus.Success, cancellationToken))
+            return Conflict(new { message = "A successful payment already exists. Wait for City Admin confirmation; do not pay again." });
         if (invoice.Status == InvoiceStatus.Paid)
         {
             return BadRequest(new { message = "This invoice has already been paid." });
@@ -340,15 +342,21 @@ public class PaymentsController : ControllerBase
         payment.GatewayTransactionId = validation.GatewayTransactionId;
         payment.PaymentMethod = validation.PaymentMethod;
 
-        payment.Invoice.Status = InvoiceStatus.Paid;
-        payment.Invoice.PaidAt = DateTime.UtcNow;
+        var admins = await _context.Users.Where(u => u.Role == "Admin" && u.Status == "Active").Select(u => u.Id).ToListAsync(cancellationToken);
+        _context.Notifications.AddRange(admins.Select(id => new Notification {
+            UserId = id, Title = "Payment approval requested", Category = "info", Link = "/admin/approvals",
+            Message = $"Invoice {payment.Invoice.InvoiceNumber}: {payment.Amount:0.##} {payment.Currency} payment is ready for review."
+        }));
+        payment.ReviewStatus = "Pending";
+        payment.Invoice.Status = InvoiceStatus.AwaitingApproval;
 
         _context.Notifications.Add(new Notification
         {
             UserId = payment.CitizenId,
             Message =
                 $"Payment received: {payment.Amount:0.##} {payment.Currency} for invoice " +
-                $"{payment.Invoice.InvoiceNumber}. Thank you.",
+                $"{payment.Invoice.InvoiceNumber}. Payment successful, wait for City Admin confirmation.",
+            Title = "Payment awaiting confirmation", Link = "/billing", Category = "info",
             CreatedAt = DateTime.UtcNow
         });
 
@@ -359,7 +367,7 @@ public class PaymentsController : ControllerBase
             "Settled {Amount} {Currency} for invoice {InvoiceNumber} via {Gateway}.",
             payment.Amount, payment.Currency, payment.Invoice.InvoiceNumber, payment.Gateway);
 
-        return ("success", "Payment received.");
+        return ("success", "Payment successful, wait for City Admin confirmation.");
     }
 
     private async Task MarkUnsuccessfulAsync(

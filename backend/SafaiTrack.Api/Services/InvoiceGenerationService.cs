@@ -6,7 +6,7 @@ using SafaiTrack.Api.Models;
 namespace SafaiTrack.Api.Services;
 
 /// <summary>
-/// Raises the monthly collection fee for every citizen attached to a ward.
+/// Prepares monthly billing proposals for every citizen attached to a ward.
 /// Runs on the same background-service pattern as the bin-fill and automatic-route
 /// services, and is idempotent: a citizen already billed for the current period is skipped.
 /// </summary>
@@ -19,7 +19,7 @@ public class InvoiceGenerationService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Bill once at startup so a freshly seeded database has invoices to show,
+        // Prepare proposals at startup for City Admin review,
         // then settle into the configured cadence.
         try { await GenerateForCurrentPeriodAsync(stoppingToken); }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
@@ -35,8 +35,8 @@ public class InvoiceGenerationService(
     }
 
     /// <summary>
-    /// Issues invoices for the calendar month containing <paramref name="asOfUtc"/>.
-    /// Returns the number of invoices created.
+    /// Prepares proposals for the calendar month containing <paramref name="asOfUtc"/>.
+    /// Returns the number of proposals created.
     /// </summary>
     public async Task<int> GenerateForCurrentPeriodAsync(
         CancellationToken cancellationToken,
@@ -57,7 +57,7 @@ public class InvoiceGenerationService(
 
         // Only citizens assigned to a ward can be billed — the fee is a ward service charge.
         var billableCitizens = await db.Users
-            .Where(u => u.Role == "Citizen" && u.WardId != null)
+            .Where(u => u.Role == "Citizen" && u.Status == "Active" && u.WardId != null)
             .Select(u => new { u.Id, WardId = u.WardId!.Value })
             .ToListAsync(cancellationToken);
 
@@ -71,6 +71,8 @@ public class InvoiceGenerationService(
             .Select(i => i.CitizenId)
             .ToListAsync(cancellationToken);
 
+        alreadyBilled.AddRange(await db.BillingDrafts.Where(d => d.PeriodStart == periodStart).Select(d => d.CitizenId).ToListAsync(cancellationToken));
+
         var pending = billableCitizens
             .Where(c => !alreadyBilled.Contains(c.Id))
             .ToList();
@@ -80,43 +82,13 @@ public class InvoiceGenerationService(
             return 0;
         }
 
-        // Continue the running sequence for this period so invoice numbers stay unique
-        // even when citizens are registered part-way through a month.
-        var sequence = alreadyBilled.Count;
-
-        var invoices = pending.Select(citizen => new Invoice
-        {
-            InvoiceNumber = $"INV-{periodStart:yyyyMM}-{++sequence:D6}",
-            CitizenId = citizen.Id,
-            WardId = citizen.WardId,
-            BillingPeriodStart = periodStart,
-            BillingPeriodEnd = periodEnd,
-            Amount = _billing.MonthlyFee,
-            Currency = _billing.Currency,
-            IssuedAt = now,
-            DueAt = now.AddDays(_billing.DueAfterDays),
-            Status = InvoiceStatus.Unpaid
+        var drafts = pending.Select(c => new BillingDraft {
+            CitizenId = c.Id, WardId = c.WardId, PeriodStart = periodStart,
+            Amount = _billing.MonthlyFee, Currency = _billing.Currency, CreatedAt = now
         }).ToList();
-
-        db.Invoices.AddRange(invoices);
-
-        var notifications = invoices.Select(invoice => new Notification
-        {
-            UserId = invoice.CitizenId,
-            Message =
-                $"Your waste collection fee for {periodStart:MMMM yyyy} is " +
-                $"{invoice.Amount:0.##} {invoice.Currency}, due {invoice.DueAt:d MMM yyyy}.",
-            CreatedAt = now
-        });
-
-        db.Notifications.AddRange(notifications);
-
+        db.BillingDrafts.AddRange(drafts);
         await db.SaveChangesAsync(cancellationToken);
-
-        logger.LogInformation(
-            "Issued {Count} collection-fee invoices for {Period:yyyy-MM}.",
-            invoices.Count, periodStart);
-
-        return invoices.Count;
+        logger.LogInformation("Prepared {Count} billing proposals for {Period:yyyy-MM}", drafts.Count, periodStart);
+        return drafts.Count;
     }
 }

@@ -14,7 +14,7 @@ namespace SafaiTrack.Api.Controllers;
 [Authorize(Roles = "Admin,WardOfficer,Driver")]
 [ApiController]
 [Route("api/routes")]
-public class RoutesController(ApplicationDbContext db, IRouteOptimizerService optimizer, RoadRoutingService roads) : ControllerBase
+public class RoutesController(ApplicationDbContext db, IRouteOptimizerService optimizer, RoadRoutingService roads, PayrollService payroll) : ControllerBase
 {
     private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     private async Task<IQueryable<Route>> ScopedRoutes()
@@ -69,13 +69,14 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
         if (route == null) return NotFound();
         if (route.Status != "Pending" || route.DriverId != null || route.TruckId != null)
             return Conflict(new { message = "Only an unassigned pending route can be assigned." });
-        var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == dto.DriverId && u.Role == "Driver" && (User.IsInRole("Admin") || u.WardId == null || u.WardId == route.WardId));
+        var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == dto.DriverId && u.Role == "Driver" && u.Status == "Active" && (User.IsInRole("Admin") || u.WardId == null || u.WardId == route.WardId));
         var truck = await db.Trucks.FindAsync(dto.TruckId);
         if (driver == null || truck == null || truck.Status != "Available")
             return BadRequest(new { message = "Select an available driver and truck." });
         if (await db.Routes.AnyAsync(r => r.RouteId != id && r.Status != "Completed" && (r.DriverId == dto.DriverId || r.TruckId == dto.TruckId)))
             return Conflict(new { message = "This driver or truck already has an unfinished route." });
         route.DriverId = driver.Id; route.TruckId = truck.TruckId; route.Status = "AwaitingAcceptance";
+        db.RouteActivities.Add(new RouteActivity { Route = route, ActorId = UserId, Action = "Assigned" });
         await db.SaveChangesAsync(); await tx.CommitAsync();
         return Ok(Summary(route));
     }
@@ -99,7 +100,7 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
     {
         var user = await db.Users.FindAsync(UserId);
         if (User.IsInRole("WardOfficer") && user!.WardId != dto.WardId) return Forbid();
-        var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == dto.DriverId && u.Role == "Driver" && (User.IsInRole("Admin") || u.WardId == null || u.WardId == dto.WardId));
+        var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == dto.DriverId && u.Role == "Driver" && u.Status == "Active" && (User.IsInRole("Admin") || u.WardId == null || u.WardId == dto.WardId));
         if (driver == null) return BadRequest(new { message = "Select a valid driver." });
         // Reserve the driver, truck, and bins atomically across concurrent dispatches.
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
@@ -117,6 +118,8 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
         var route = pending ?? new Route { WardId = dto.WardId };
         if (pending != null) db.RouteStops.RemoveRange(pending.RouteStops);
         route.DriverId = driver.Id; route.TruckId = truck.TruckId; route.Status = "AwaitingAcceptance";
+        db.RouteActivities.Add(new RouteActivity { Route = route, ActorId = UserId, Action = "Assigned" });
+        db.RouteActivities.Add(new RouteActivity { Route = route, ActorId = UserId, Action = "Optimized" });
         route.Algorithm = result.Algorithm; route.TotalDistanceKm = result.TotalDistanceKm;
         route.NaiveDistanceKm = result.NaiveDistanceKm;
         route.RouteStops = result.OrderedStops.Select(s => new RouteStop { BinId = s.BinId, StopSequence = s.StopSequence }).ToList();
@@ -167,6 +170,7 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
         if (route.Status != "Planned" && route.Status != "Pending" && route.Status != "AwaitingAcceptance") return Conflict(new { message = "Only a planned route can be optimized." });
         var result = optimizer.ComputeDijkstraRoute(route.RouteStops.Select(s => s.Bin!).ToList());
         foreach (var stop in route.RouteStops) stop.StopSequence = result.OrderedStops.Single(s => s.BinId == stop.BinId).StopSequence;
+        db.RouteActivities.Add(new RouteActivity { Route = route, ActorId = UserId, Action = "Optimized" });
         route.Algorithm = result.Algorithm;
         route.TotalDistanceKm = result.TotalDistanceKm;
         route.NaiveDistanceKm ??= result.NaiveDistanceKm;
@@ -277,6 +281,8 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
         if (route.Status != "InProgress" || route.RouteStops.Any(s => s.CollectedAt == null))
             return Conflict(new { message = "Collect every stop before completing this route." });
         route.Status = "Completed";
+        route.CompletedAt = DateTime.UtcNow;
+        await payroll.RecordCompletionAsync(route, route.CompletedAt.Value);
         if (route.Truck != null) route.Truck.Status = "Available";
 
         // 1. Notify Ward Officer
@@ -298,58 +304,12 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
             });
         }
 
-        // 2. Notify Driver (Shift completion + Daily Wage + 20% Performance Bonus from City Admin)
-        if (!string.IsNullOrEmpty(route.DriverId))
-        {
-            int binCount = route.RouteStops.Count;
-            // Realistic Bangladesh municipal rate: Base wage ৳800 BDT + ৳50 BDT per collected bin
-            int baseWage = 800;
-            int binIncentive = binCount * 50;
-            int totalWage = baseWage + binIncentive;
-
-            // 1) Shift completion
-            db.Notifications.Add(new Notification
-            {
-                UserId = route.DriverId,
-                RelatedRouteId = route.RouteId,
-                Title = "Shift Complete",
-                Message = $"Great job! Route #{route.RouteId} is finished. All {binCount} bins successfully collected.",
-                Category = "success",
-                Link = "/driver/route",
-                IsRead = false,
-                CreatedAt = DateTime.UtcNow
+        if (route.DriverId != null)
+            db.Notifications.Add(new Notification {
+                UserId = route.DriverId, RelatedRouteId = route.RouteId,
+                Title = "Shift complete", Category = "success", Link = "/driver/wages",
+                Message = $"Route #{route.RouteId} completed. {route.RouteStops.Count} collected bins have been recorded in your daily wage period."
             });
-
-            // 2) City Admin Wage Disbursement
-            db.Notifications.Add(new Notification
-            {
-                UserId = route.DriverId,
-                RelatedRouteId = route.RouteId,
-                Title = "Daily Wage Credited - City Admin",
-                Message = $"City Admin Treasury credited your daily wage of ৳{totalWage:N0} BDT (Base ৳{baseWage} + ৳{binIncentive} for {binCount} bins) for Route #{route.RouteId}. Transferred to your account.",
-                Category = "success",
-                Link = "/driver/route",
-                IsRead = false,
-                CreatedAt = DateTime.UtcNow
-            });
-
-            // 3) Performance Bonus if >= 6 bins: 20% bonus
-            if (binCount >= 6)
-            {
-                int bonusAmount = (int)(totalWage * 0.20);
-                db.Notifications.Add(new Notification
-                {
-                    UserId = route.DriverId,
-                    RelatedRouteId = route.RouteId,
-                    Title = "20% Performance Bonus Awarded",
-                    Message = $"City Admin Bonus: You earned a 20% high-coverage bonus (৳{bonusAmount:N0} BDT) for collecting {binCount} bins on Route #{route.RouteId} without delay.",
-                    Category = "success",
-                    Link = "/driver/route",
-                    IsRead = false,
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
-        }
 
         await db.SaveChangesAsync();
         await tx.CommitAsync();
