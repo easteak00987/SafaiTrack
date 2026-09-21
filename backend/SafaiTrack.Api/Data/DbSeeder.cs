@@ -9,7 +9,7 @@ public static class DbSeeder
     private record WardDefinition(string Name, double Lat, double Lon, string Description);
     private record DriverDefinition(string Email, string FullName, string Gender, string Phone);
     private record OfficerDefinition(string Email, string FullName, string Gender, string Phone, string WardKeyword, bool IsBackup = false);
-    private record CitizenDefinition(string Email, string FullName, string Gender, string Phone);
+    private record CitizenDefinition(string Email, string FullName, string Gender, string Phone, string WardKeyword);
 
     public static async Task SeedAsync(
         ApplicationDbContext context,
@@ -328,14 +328,15 @@ public static class DbSeeder
         // 7. Citizens
         var citizens = new List<CitizenDefinition>
         {
-            new("citizen@safaitrack.local", "Tanvir Hossain", "Male", "+8801991000101"),
-            new("citizen01@safaitrack.local", "Nusrat Jahan", "Female", "+8801991000102"),
-            new("citizen02@safaitrack.local", "Sadia Afrin", "Female", "+8801991000103"),
-            new("easteak00987@gmail.com", "Easteak Ahmed", "Male", "+8801991000166")
+            new("citizen@safaitrack.local", "Tanvir Hossain", "Male", "+8801991000101", "Dhanmondi"),
+            new("citizen01@safaitrack.local", "Nusrat Jahan", "Female", "+8801991000102", "Gulshan"),
+            new("citizen02@safaitrack.local", "Sadia Afrin", "Female", "+8801991000103", "Mirpur"),
+            new("easteak00987@gmail.com", "Easteak Ahmed", "Male", "+8801991000166", "Dhanmondi")
         };
 
         foreach (var c in citizens)
         {
+            var assignedWard = FindWardByKeyword(c.WardKeyword);
             var user = await userManager.FindByEmailAsync(c.Email);
             if (user == null)
             {
@@ -348,6 +349,7 @@ public static class DbSeeder
                     PhoneNumber = c.Phone,
                     Role = "Citizen",
                     Status = "Active",
+                    WardId = assignedWard?.WardId,
                     EmailConfirmed = true
                 };
                 await userManager.CreateAsync(user, "Password123");
@@ -360,6 +362,10 @@ public static class DbSeeder
                 user.PhoneNumber = c.Phone;
                 user.Role = "Citizen";
                 user.Status = "Active";
+                if (user.WardId == null && assignedWard != null)
+                {
+                    user.WardId = assignedWard.WardId;
+                }
                 await userManager.UpdateAsync(user);
             }
         }
