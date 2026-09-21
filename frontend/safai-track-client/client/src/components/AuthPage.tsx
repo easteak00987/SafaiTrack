@@ -82,6 +82,74 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
   const handleGoogleSignIn = async () => {
     setBusy(true);
     setError("");
+
+    const google = (window as any).google;
+    const googleClientId =
+      import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+      "1082697843640-dummygoogleclientid.apps.googleusercontent.com";
+
+    if (google?.accounts?.oauth2) {
+      try {
+        const client = google.accounts.oauth2.initTokenClient({
+          client_id: googleClientId,
+          scope: "email profile openid",
+          callback: async (response: any) => {
+            if (response.error) {
+              setBusy(false);
+              setError("Google sign-in was cancelled or denied.");
+              return;
+            }
+            try {
+              let gEmail = "";
+              let gName = "";
+
+              if (response.access_token) {
+                const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+                  headers: { Authorization: `Bearer ${response.access_token}` },
+                });
+                const userInfo = await res.json();
+                gEmail = userInfo.email;
+                gName = userInfo.name || userInfo.email?.split("@")[0];
+              }
+
+              if (!gEmail) {
+                gEmail = email.trim() || prompt("Google Account Connected! Confirm your Google Email:", "user@gmail.com") || "";
+              }
+
+              if (!gEmail) {
+                setBusy(false);
+                return;
+              }
+
+              const backendRole = ROLE_PRESETS[role].backendRole;
+              const { data } = await apiClient.post("/api/auth/google", {
+                email: gEmail,
+                name: gName || gEmail.split("@")[0],
+                role: backendRole,
+              });
+
+              login(data.token, {
+                fullName: data.fullName,
+                email: gEmail,
+                role: data.role,
+              });
+              localStorage.setItem("safaitrack_active_role", role);
+              navigate("/home", { replace: true });
+            } catch (err) {
+              setError(apiError(err));
+            } finally {
+              setBusy(false);
+            }
+          },
+        });
+        client.requestAccessToken();
+        return;
+      } catch (e) {
+        console.warn("Google OAuth popup fallback triggered", e);
+      }
+    }
+
+    // Fallback if Google GIS script is loading or blocked by adblock
     try {
       const gEmail = email.trim() || prompt("Enter your Google Account Email:", "user@gmail.com");
       if (!gEmail) {
