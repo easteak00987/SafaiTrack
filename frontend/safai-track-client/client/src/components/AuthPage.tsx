@@ -63,10 +63,52 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotStep, setForgotStep] = useState<"email" | "token">("email");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [generatedToken, setGeneratedToken] = useState("");
+  const [forgotBusy, setForgotBusy] = useState(false);
+  const [forgotError, setForgotError] = useState("");
+  const [forgotSuccess, setForgotSuccess] = useState("");
+
   const handleSelectRole = (newRole: UserRole) => {
     setRole(newRole);
     setRoleDropdownOpen(false);
     setError("");
+  };
+
+  const handleGoogleSignIn = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const gEmail = email.trim() || prompt("Enter your Google Account Email:", "user@gmail.com");
+      if (!gEmail) {
+        setBusy(false);
+        return;
+      }
+      const gName = name.trim() || gEmail.split("@")[0];
+      const backendRole = ROLE_PRESETS[role].backendRole;
+
+      const { data } = await apiClient.post("/api/auth/google", {
+        email: gEmail,
+        name: gName,
+        role: backendRole,
+      });
+
+      login(data.token, {
+        fullName: data.fullName,
+        email: gEmail,
+        role: data.role,
+      });
+      localStorage.setItem("safaitrack_active_role", role);
+      navigate("/home", { replace: true });
+    } catch (err) {
+      setError(apiError(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const missingRequirements = missingPasswordRequirements(password);
@@ -240,7 +282,32 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
               </div>
             </div>
             <div className="field-group">
-              <label htmlFor="auth-password">Password</label>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <label htmlFor="auth-password">Password</label>
+                {!register && (
+                  <button
+                    type="button"
+                    className="forgot-password-link"
+                    onClick={() => {
+                      setShowForgotModal(true);
+                      setForgotStep("email");
+                      setForgotError("");
+                      setForgotSuccess("");
+                    }}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#558B2F",
+                      fontWeight: 700,
+                      fontSize: "14px",
+                      cursor: "pointer",
+                      padding: 0,
+                    }}
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
               <div className="input-with-icon">
                 <Lock size={17} className="field-icon" />
                 <input
@@ -373,7 +440,241 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
                   : "Open access layer"}
               <ArrowUpRight size={22} strokeWidth={2.6} />
             </motion.button>
+
+            {/* Google Sign In Divider & Button */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "14px 0 6px" }}>
+              <div style={{ flex: 1, height: 1, background: "rgba(16, 59, 60, 0.12)" }} />
+              <span style={{ fontSize: 13, color: "#64748B", fontWeight: 700 }}>OR</span>
+              <div style={{ flex: 1, height: 1, background: "rgba(16, 59, 60, 0.12)" }} />
+            </div>
+
+            <button
+              type="button"
+              className="google-auth-btn"
+              disabled={busy}
+              onClick={handleGoogleSignIn}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 12,
+                width: "100%",
+                minHeight: 52,
+                borderRadius: 12,
+                border: "1.5px solid rgba(16, 59, 60, 0.18)",
+                background: "#FFFFFF",
+                color: "#1E293B",
+                fontWeight: 700,
+                fontSize: 16,
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.04)"
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.15C3.26 21.3 7.35 24 12 24z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.28 14.24c-.25-.72-.38-1.49-.38-2.24s.13-1.52.38-2.24V6.61H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.39l3.99-3.15z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.7 1.29 6.61l3.99 3.15c.95-2.85 3.6-4.96 6.72-4.96z"
+                />
+              </svg>
+              <span>Continue with Google</span>
+            </button>
           </div>
+
+          {/* Password Reset Modal */}
+          <AnimatePresence>
+            {showForgotModal && (
+              <div
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  background: "rgba(15, 23, 42, 0.65)",
+                  backdropFilter: "blur(6px)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 9999,
+                  padding: 20
+                }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                  style={{
+                    background: "#FFFFFF",
+                    borderRadius: 16,
+                    padding: 32,
+                    maxWidth: 440,
+                    width: "100%",
+                    boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                    <h3 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#0F172A" }}>
+                      {forgotStep === "email" ? "Reset Your Password" : "Enter Reset Token"}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotModal(false)}
+                      style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#64748B" }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {forgotError && (
+                    <div style={{ background: "#FEF2F2", color: "#991B1B", border: "1px solid #FCA5A5", borderRadius: 8, padding: 12, fontSize: 14, marginBottom: 16 }}>
+                      {forgotError}
+                    </div>
+                  )}
+
+                  {forgotSuccess && (
+                    <div style={{ background: "#F0FDF4", color: "#166534", border: "1px solid #86EFAC", borderRadius: 8, padding: 12, fontSize: 14, marginBottom: 16 }}>
+                      {forgotSuccess}
+                    </div>
+                  )}
+
+                  {forgotStep === "email" ? (
+                    <form
+                      onSubmit={async e => {
+                        e.preventDefault();
+                        if (!forgotEmail) return;
+                        setForgotBusy(true);
+                        setForgotError("");
+                        setForgotSuccess("");
+                        try {
+                          const res = await apiClient.post("/api/auth/forgot-password", { email: forgotEmail });
+                          if (res.data.token) {
+                            setGeneratedToken(res.data.token);
+                            setResetToken(res.data.token);
+                            setForgotSuccess("Reset token generated! Proceeding to reset step.");
+                            setForgotStep("token");
+                          } else {
+                            setForgotSuccess(res.data.message || "Reset link generated.");
+                            setForgotStep("token");
+                          }
+                        } catch (err) {
+                          setForgotError(apiError(err));
+                        } finally {
+                          setForgotBusy(false);
+                        }
+                      }}
+                    >
+                      <p style={{ color: "#64748B", fontSize: 15, marginTop: 0, marginBottom: 16 }}>
+                        Enter your registered email address and we'll generate a password reset token for you.
+                      </p>
+                      <div className="field-group" style={{ marginBottom: 20 }}>
+                        <label htmlFor="forgot-email-input">Email Address</label>
+                        <div className="input-with-icon">
+                          <Mail size={17} className="field-icon" />
+                          <input
+                            id="forgot-email-input"
+                            type="email"
+                            value={forgotEmail}
+                            onChange={e => setForgotEmail(e.target.value)}
+                            required
+                            placeholder="you@example.com"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={forgotBusy}
+                        className="lime-button full"
+                        style={{ minHeight: 48 }}
+                      >
+                        {forgotBusy ? "Generating Token..." : "Request Reset Token"}
+                      </button>
+                    </form>
+                  ) : (
+                    <form
+                      onSubmit={async e => {
+                        e.preventDefault();
+                        if (!resetToken || !newPassword) return;
+                        setForgotBusy(true);
+                        setForgotError("");
+                        setForgotSuccess("");
+                        try {
+                          await apiClient.post("/api/auth/reset-password", {
+                            email: forgotEmail,
+                            token: resetToken,
+                            newPassword,
+                          });
+                          setForgotSuccess("Password reset successfully! You can now log in.");
+                          setTimeout(() => {
+                            setShowForgotModal(false);
+                            setEmail(forgotEmail);
+                          }, 1800);
+                        } catch (err) {
+                          setForgotError(apiError(err));
+                        } finally {
+                          setForgotBusy(false);
+                        }
+                      }}
+                    >
+                      {generatedToken && (
+                        <div style={{ background: "#F1F5F9", padding: 12, borderRadius: 8, marginBottom: 16, fontSize: 13, color: "#334155" }}>
+                          <b>Generated Token:</b>
+                          <div style={{ fontFamily: "monospace", background: "#E2E8F0", padding: "6px 8px", borderRadius: 4, marginTop: 4, wordBreak: "break-all" }}>
+                            {generatedToken}
+                          </div>
+                        </div>
+                      )}
+                      <div className="field-group" style={{ marginBottom: 16 }}>
+                        <label htmlFor="reset-token-input">Reset Token</label>
+                        <div className="input-with-icon">
+                          <Key size={17} className="field-icon" />
+                          <input
+                            id="reset-token-input"
+                            value={resetToken}
+                            onChange={e => setResetToken(e.target.value)}
+                            required
+                            placeholder="Paste reset token here"
+                          />
+                        </div>
+                      </div>
+                      <div className="field-group" style={{ marginBottom: 20 }}>
+                        <label htmlFor="new-password-input">New Password</label>
+                        <div className="input-with-icon">
+                          <Lock size={17} className="field-icon" />
+                          <input
+                            id="new-password-input"
+                            type="password"
+                            value={newPassword}
+                            onChange={e => setNewPassword(e.target.value)}
+                            required
+                            minLength={8}
+                            placeholder="Min 8 chars (letters, numbers, symbol)"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={forgotBusy}
+                        className="lime-button full"
+                        style={{ minHeight: 48 }}
+                      >
+                        {forgotBusy ? "Resetting Password..." : "Reset Password"}
+                      </button>
+                    </form>
+                  )}
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
           <div className="civic-workspace-footer">
             <span className="workspace-line" />
             <span className="workspace-text">PROTECTED CIVIC WORKSPACE</span>
