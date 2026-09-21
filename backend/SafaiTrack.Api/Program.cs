@@ -10,13 +10,31 @@ using SafaiTrack.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Configure DbContext with SQL Server from configuration
+// 1. Configure DbContext dynamically with SQL Server or PostgreSQL
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+    if (!string.IsNullOrWhiteSpace(databaseUrl))
+    {
+        connectionString = PostgresConnectionString.FromUrl(databaseUrl);
+    }
+}
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
     if (!string.IsNullOrEmpty(connectionString))
     {
-        options.UseSqlServer(connectionString);
+        if (connectionString.StartsWith("Host=", StringComparison.OrdinalIgnoreCase) ||
+            connectionString.Contains("Port=", StringComparison.OrdinalIgnoreCase) ||
+            connectionString.Contains("Username=", StringComparison.OrdinalIgnoreCase))
+        {
+            options.UseNpgsql(connectionString);
+        }
+        else
+        {
+            options.UseSqlServer(connectionString);
+        }
     }
 });
 
@@ -133,16 +151,20 @@ app.MapGet("/", () => Results.Redirect("/swagger"));
 
 app.MapControllers();
 
-// Attempt seeding if database is reachable
+// Attempt database schema preparation and seeding
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
+        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+
         if (context.Database.CanConnect())
         {
-            await DbSeeder.SeedAsync(context);
+            await context.Database.EnsureCreatedAsync();
+            await DbSeeder.SeedAsync(context, userManager, roleManager);
         }
     }
     catch (Exception ex)
