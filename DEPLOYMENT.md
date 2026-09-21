@@ -1,54 +1,39 @@
-# 🚀 SafaiTrack Deployment Guide
+# 🌐 SafaiTrack Live Application
 
-Simple, 100% free deployment setup using **Render** and **Neon PostgreSQL**.
+### 🔗 Main Presentation URL:
+## **[https://safaitrack-client.onrender.com](https://safaitrack-client.onrender.com)**
 
----
-
-## 🏆 Live Links (Presentation & Evaluation)
-
-| Component | Live Link | Description |
-| :--- | :--- | :--- |
-| 🌐 **Frontend Web App** | [https://safaitrack-client.onrender.com](https://safaitrack-client.onrender.com) | React + TypeScript web app for Citizens, Drivers, & Admins |
-| ⚙️ **Backend API** | [https://safaitrack-api.onrender.com](https://safaitrack-api.onrender.com) | ASP.NET Core 10 Web API service |
-| 📄 **Swagger Specs** | [https://safaitrack-api.onrender.com/swagger](https://safaitrack-api.onrender.com/swagger) | Interactive API endpoint documentation |
-| 🏥 **Health Check** | [https://safaitrack-api.onrender.com/health](https://safaitrack-api.onrender.com/health) | System health monitor (`{"status":"healthy"}`) |
+> [!IMPORTANT]
+> **This single link runs the entire application.** It connects the React frontend to the ASP.NET Core API and PostgreSQL database automatically. Open this link to evaluate Citizen, Driver, Admin, and Inspector workspaces.
 
 ---
 
-## 📌 How the Architecture Works
+## 🎯 Why We Deployed
 
-1. **Database**: [Neon](https://neon.tech) — Free, permanent PostgreSQL database (no 30-day deletion).
-2. **Backend**: [Render Web Service](https://render.com) — Runs ASP.NET Core API inside Docker container.
-3. **Frontend**: [Render Static Site](https://render.com) — Hosts compiled React files globally.
+1. **Public Accessibility**: Allows course evaluators, instructors, and judges to access and test the full live system instantly from any device without installing local dependencies.
+2. **Real-world Simulation**: Demonstrates live sensor data simulation, real-time route optimization on Dhaka ward maps, and automated bill generation in a production-like cloud environment.
+3. **100% Free & Sustainable Architecture**: Designed to run permanently on free-tier cloud infrastructure aligned with UN SDG 11 (*Sustainable Cities and Communities*).
 
 ---
 
-## 🛠️ Quick 3-Step Deployment Guide
+## 🏗️ How We Deployed
 
-### 1️⃣ Step 1: Create Database on Neon
-1. Sign up at **[neon.tech](https://neon.tech)** and click **Create Project**.
-2. Click the green **Connect** button.
-3. Copy your PostgreSQL connection URL:
-   ```text
-   postgresql://user:password@ep-something.aws.neon.tech/neondb?sslmode=require
-   ```
+The project is deployed using a decoupled, 3-tier cloud architecture:
 
-### 2️⃣ Step 2: Deploy on Render via Blueprint
-1. Log in to **[dashboard.render.com](https://dashboard.render.com)**.
-2. Click **New +** → **Blueprint**.
-3. Select your GitHub repository (`Safai_Track`) and branch `main`.
+| Layer | Service | Deployment Method | Why This Technology |
+| :--- | :--- | :--- | :--- |
+| 🌐 **Frontend Web App** | **Render Static Site** | Automated Vite production build from `main` branch | Served globally over CDN with sub-second page load times. |
+| ⚙️ **Backend API** | **Render Web Service** | Containerized **ASP.NET Core 10** built via Dockerfile | Runs C# Web API endpoints, JWT auth, and background services. |
+| 🛢️ **Database** | **Neon PostgreSQL** | Serverless cloud PostgreSQL database | Provides permanent storage without the 30-day deletion limit of standard free DBs. |
+| ⚡ **Service Keep-Warm** | **GitHub Actions** | Automated ping workflow ([`keep-warm.yml`](.github/workflows/keep-warm.yml)) | Pings `/health` every 10 minutes to prevent cloud sleep cycles during evaluation. |
 
-### 3️⃣ Step 3: Enter Environment Variables
-When Render asks for environment variables, fill in:
+---
 
-* **For `safaitrack-api`**:
-  - `DATABASE_URL`: *(Your Neon string from Step 1)*
-  - `Cors__AllowedOrigins__0`: `https://safaitrack-client.onrender.com`
-  - `SslCommerz__ApiBaseUrl`: `https://safaitrack-api.onrender.com`
-  - `SslCommerz__ClientBaseUrl`: `https://safaitrack-client.onrender.com`
+## 🔗 Supplementary Links (For Technical Inspection Only)
 
-* **For `safaitrack-client`**:
-  - `VITE_API_BASE_URL`: `https://safaitrack-api.onrender.com`
+* ⚙️ **Backend API Base**: [https://safaitrack-api.onrender.com](https://safaitrack-api.onrender.com)
+* 📄 **OpenAPI / Swagger Specs**: [https://safaitrack-api.onrender.com/swagger](https://safaitrack-api.onrender.com/swagger)
+* 🏥 **System Health Check**: [https://safaitrack-api.onrender.com/health](https://safaitrack-api.onrender.com/health)
 
 ---
 
