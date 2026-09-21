@@ -227,7 +227,9 @@ export function PeopleDirectory({
             key={p.id}
             initial={reduced ? false : { opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: Math.min(index * 0.03, 0.2) }}
+            whileHover={{ y: -8, scale: 1.015 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.03, 0.2) }}
           >
             <div className="ca-person-top">
               <span className="ca-avatar">
@@ -538,6 +540,9 @@ function WageCard({
       className="ca-wage"
       initial={reduced ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -8, scale: 1.015 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
     >
       <div className="ca-person-top">
         <Wallet size={22} />

@@ -205,7 +205,11 @@ export default function AuthPage({ register = false, cityAdmin = false }: { regi
                         phoneNumber: phone.trim(),
                         gender,
                         role: backendRole,
-                        ...(backendRole === "WardOfficer" ? { requestedWardId: Number(requestedWardId) } : backendRole === "Citizen" ? { wardId: Number(requestedWardId) } : {}),
+                        ...(backendRole === "WardOfficer"
+                          ? { requestedWardId: Number(requestedWardId) }
+                          : backendRole === "Citizen"
+                          ? { requestedWardId: Number(requestedWardId), wardId: Number(requestedWardId) }
+                          : {}),
                       }
                     : {}),
                 }
@@ -499,7 +503,7 @@ export default function AuthPage({ register = false, cityAdmin = false }: { regi
               {register && (role === "Ward Officer" || role === "Citizen") && (
                 <div className="field-group">
                   <label htmlFor="auth-ward">
-                    Your service ward <span style={{ color: "#d9534f" }}>*</span>
+                    {role === "Citizen" ? "Choose your ward" : "Requested service ward"} <span style={{ color: "#d9534f" }}>*</span>
                   </label>
                   <select
                     id="auth-ward"
@@ -519,7 +523,7 @@ export default function AuthPage({ register = false, cityAdmin = false }: { regi
                       outline: "none",
                     }}
                   >
-                    <option value="">Select your ward</option>
+                    <option value="">{role === "Citizen" ? "Select your residence ward" : "Select your service ward"}</option>
                     {wards.map(w => (
                       <option key={w.wardId} value={w.wardId}>
                         {w.name}

@@ -267,7 +267,7 @@ function Shell() {
   return (
     <div className="ws">
       <aside className="ws-sidebar">
-        <Link className="ws-brand" to="/home">
+        <Link className="ws-brand" to="/">
           SafaiTrack
         </Link>
         <p className="ws-role">{roleNames[user!.role]}</p>
@@ -1407,14 +1407,22 @@ interface PendingUser {
   gender: string | null;
 }
 
+interface TruckItem {
+  truckId: number;
+  plateNumber: string;
+  status: string;
+}
+
 function PendingApprovals() {
   const resource = useData<PendingUser[]>("/api/auth/pending-approvals");
   const wards = useData<Ward[]>("/api/workspace/wards");
+  const trucks = useData<TruckItem[]>("/api/trucks");
   useEffect(() => { const timer = setInterval(resource.reload, 15000); return () => clearInterval(timer); }, [resource.reload]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
   const [selectedWards, setSelectedWards] = useState<Record<string, number | "">>({});
+  const [selectedTrucks, setSelectedTrucks] = useState<Record<string, number | "">>({});
 
   const handleApprove = async (user: PendingUser) => {
     setBusy(true);
@@ -1426,18 +1434,21 @@ function PendingApprovals() {
           ? (selectedWards[user.id] !== undefined && selectedWards[user.id] !== ""
               ? Number(selectedWards[user.id])
               : user.requestedWardId ?? user.wardId)
-          : (selectedWards[user.id] ? Number(selectedWards[user.id]) : null);
+          : null;
 
       if ((user.role === "WardOfficer" || user.role === "Citizen") && !wardId) {
-        setError(`Please select an assigned ward for officer ${user.fullName}.`);
+        setError(`Please select an assigned ward for ${user.fullName}.`);
         setBusy(false);
         return;
       }
 
+      const truckId = user.role === "Driver" ? (selectedTrucks[user.id] ? Number(selectedTrucks[user.id]) : null) : null;
+
       await apiClient.put(`/api/auth/pending-approvals/${user.id}/approve`, {
         wardId: wardId || null,
+        truckId: truckId || null,
       });
-      setSuccess(`Approved ${user.fullName} (${roleNames[user.role] || user.role}).`);
+      setSuccess(`Approved ${user.fullName} (${user.role === "Citizen" ? "Citizenship approved" : roleNames[user.role] || user.role}).`);
       await resource.reload();
     } catch (err) {
       setError(apiError(err));
@@ -1490,38 +1501,66 @@ function PendingApprovals() {
                   Requested Ward: <strong>{u.requestedWardName ? `${u.requestedWardName} (Ward ${u.requestedWardId})` : (u.requestedWardId ? `Ward ${u.requestedWardId}` : "None")}</strong>
                 </div>
               )}
+              {u.role === "Citizen" && (
+                <div style={{ fontSize: "0.85rem", color: "#047857", marginTop: 4 }}>
+                  Requested Ward: <strong>{u.requestedWardName ? `${u.requestedWardName} (Ward ${u.requestedWardId})` : (u.requestedWardId ? `Ward ${u.requestedWardId}` : (u.wardId ? `Ward ${u.wardId}` : "None"))}</strong>
+                </div>
+              )}
               {u.role === "Driver" && (
                 <div style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 4 }}>
-                  Role: City-wide pool driver (default) or assign to specific ward below
+                  Role: Heavy Collection Fleet Driver &bull; Assign collection truck below
                 </div>
               )}
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.875rem" }}>
-                <span>Assign Ward:</span>
-                <select
-                  value={
-                    selectedWards[u.id] !== undefined
-                      ? selectedWards[u.id]
-                      : ((u.requestedWardId ?? u.wardId) ? String(u.requestedWardId ?? u.wardId) : "")
-                  }
-                  onChange={e =>
-                    setSelectedWards(prev => ({
-                      ...prev,
-                      [u.id]: e.target.value ? Number(e.target.value) : "",
-                    }))
-                  }
-                  style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #cbd5e1" }}
-                >
-                  <option value="">{u.role === "Driver" ? "City-wide Pool (Unassigned)" : "-- Select Ward --"}</option>
-                  {wards.data?.map(w => (
-                    <option key={w.wardId} value={w.wardId}>
-                      Ward {w.wardId} - {w.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {u.role === "Driver" ? (
+                <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.875rem" }}>
+                  <span style={{ fontWeight: 600, color: "#1e293b" }}>Assign Truck:</span>
+                  <select
+                    value={selectedTrucks[u.id] ?? ""}
+                    onChange={e =>
+                      setSelectedTrucks(prev => ({
+                        ...prev,
+                        [u.id]: e.target.value ? Number(e.target.value) : "",
+                      }))
+                    }
+                    style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #cbd5e1" }}
+                  >
+                    <option value="">-- Select Truck --</option>
+                    {trucks.data?.map(t => (
+                      <option key={t.truckId} value={t.truckId}>
+                        Truck #{t.truckId} - {t.plateNumber} ({t.status})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.875rem" }}>
+                  <span style={{ fontWeight: 600, color: "#1e293b" }}>Assign Ward:</span>
+                  <select
+                    value={
+                      selectedWards[u.id] !== undefined
+                        ? selectedWards[u.id]
+                        : ((u.requestedWardId ?? u.wardId) ? String(u.requestedWardId ?? u.wardId) : "")
+                    }
+                    onChange={e =>
+                      setSelectedWards(prev => ({
+                        ...prev,
+                        [u.id]: e.target.value ? Number(e.target.value) : "",
+                      }))
+                    }
+                    style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #cbd5e1" }}
+                  >
+                    <option value="">-- Select Ward --</option>
+                    {wards.data?.map(w => (
+                      <option key={w.wardId} value={w.wardId}>
+                        Ward {w.wardId} - {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
               <button
                 type="button"
@@ -1534,13 +1573,13 @@ function PendingApprovals() {
                   padding: "6px 14px",
                   borderRadius: 6,
                   cursor: "pointer",
-                  fontWeight: 500,
+                  fontWeight: 600,
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 4
                 }}
               >
-                <Check size={16} /> Approve
+                <Check size={16} /> {u.role === "Citizen" ? "Approve Citizenship" : u.role === "Driver" ? "Approve Driver" : "Approve Officer"}
               </button>
               <button
                 type="button"

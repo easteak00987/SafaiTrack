@@ -3,7 +3,7 @@ import { BrowserRouter, Link } from "react-router-dom";
 import { AnimatePresence, animate, motion, useMotionValue, useMotionValueEvent, useScroll, useTransform } from "framer-motion";
 import { ArrowUpRight, Bell, Bike, Camera, Check, ChevronDown, ChevronRight, CircleAlert, ClipboardList, Clock3, Compass, Eye, EyeOff, FileText, Filter, Gauge, Key, LayoutDashboard, Lock, Mail, MapPin, Menu, Navigation, Radio, RefreshCw, Route as RouteIcon, Search, Settings2, Shield, ShieldCheck, Sparkles, Truck, User, UserRound, X, Zap } from "lucide-react";
 import { getBinsForWardSync, computeDijkstraRoute, computeNearestNeighborRoute } from "./lib/routeOptimizer";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import WorkspaceRoutes from "./Workspace";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -217,11 +217,20 @@ function Landing() {
     const id = setInterval(() => setActiveFlowStep(i => (i + 1) % 4), 2800);
     return () => clearInterval(id);
   }, []);
+  const { user, isAuthenticated } = useAuth();
+  const dashboardPath = user?.role === "Citizen"
+    ? "/citizen/dashboard"
+    : user?.role === "Driver"
+      ? "/driver/dashboard"
+      : user?.role === "WardOfficer"
+        ? "/officer/dashboard"
+        : "/admin/dashboard";
+
   const bins = ["Dhanmondi 08", "Kalabagan 03", "Lalmatia 06", "Mohammadpur 11", "Adabor 02"]; const { scrollY } = useScroll(); const navX = useTransform(scrollY, [0, 900], [0, 18]); const navScale = useTransform(scrollY, [0, 900], [1, 0.98]); const [scrolled, setScrolled] = useState(false); useMotionValueEvent(scrollY, "change", (latest) => setScrolled(latest > 24));
   return <div className="landing">
-    <motion.header style={{ x: navX, scale: navScale }} className={`landing-nav ${scrolled ? "scrolled" : ""}`}><Logo /><nav><a href="#system">System</a><a href="#flow">How it works</a><a href="#city">For the city</a></nav><div className="nav-actions"><Link to="/login" className="text-link">Sign in</Link><Link to="/city-admin/login" className="lime-button small">City Admin <ArrowUpRight size={15} /></Link></div><button className="mobile-menu"><Menu size={20} /></button></motion.header>
+    <motion.header style={{ x: navX, scale: navScale }} className={`landing-nav ${scrolled ? "scrolled" : ""}`}><Logo /><nav><a href="#system">System</a><a href="#flow">How it works</a><a href="#city">For the city</a></nav><div className="nav-actions">{isAuthenticated ? <Link to={dashboardPath} className="text-link">Dashboard</Link> : <Link to="/login" className="text-link">Sign in</Link>}<Link to={isAuthenticated && user?.role === "Admin" ? "/admin/dashboard" : "/city-admin/login"} className="lime-button small">City Admin <ArrowUpRight size={15} /></Link></div><button className="mobile-menu"><Menu size={20} /></button></motion.header>
     <main>
-      <motion.section className="hero-section" variants={stagger} initial="hidden" whileInView="show" viewport={{ once: false, amount: 0.2 }}><motion.div className="hero-copy" variants={rise}><div className="eyebrow"><SignalBar /> SMART COLLECTION INFRASTRUCTURE <span>/</span> DHAKA</div><h1>The city moves.<br /><em>Collection</em> should<br />move with it.</h1><p>SafaiTrack turns overflowing bins, fixed schedules, and unanswered complaints into one visible civic workflow—built for the streets of Dhaka.</p><div className="hero-actions"><Link to="/home" className="lime-button">Explore the system <ArrowUpRight size={16} /></Link><a href="#flow" className="ghost-button"><span className="play-dot">▶</span> Watch the workflow</a></div><div className="hero-foot"><span>WDC</span><span>Built with the street in mind.</span><span>Course project / production intent</span></div></motion.div>
+      <motion.section className="hero-section" variants={stagger} initial="hidden" whileInView="show" viewport={{ once: false, amount: 0.2 }}><motion.div className="hero-copy" variants={rise}><div className="eyebrow"><SignalBar /> SMART COLLECTION INFRASTRUCTURE <span>/</span> DHAKA</div><h1>The city moves.<br /><em>Collection</em> should<br />move with it.</h1><p>SafaiTrack turns overflowing bins, fixed schedules, and unanswered complaints into one visible civic workflow—built for the streets of Dhaka.</p><div className="hero-actions"><Link to={isAuthenticated ? dashboardPath : "/home"} className="lime-button">Explore the system <ArrowUpRight size={16} /></Link><a href="#flow" className="ghost-button"><span className="play-dot">▶</span> Watch the workflow</a></div><div className="hero-foot"><span>WDC</span><span>Built with the street in mind.</span><span>Course project / production intent</span></div></motion.div>
       <motion.div className="hero-visual" variants={rise}><motion.div className="hero-image" initial={{ opacity: 0, scale: .9 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 120, damping: 18, delay: .2 }} /><HeroMiniMap /></motion.div></motion.section>
       <section className="signal-strip" aria-label="SafaiTrack system signals">
         <div className="signal-strip-inner">
@@ -543,7 +552,7 @@ function Landing() {
               Aligned to the everyday systems that make SDG 11 and SDG 12 tangible: cleaner streets, clearer handoffs, less wasted motion.
             </motion.p>
             <motion.div variants={rise}>
-              <Link to="/home" className="lime-button">
+              <Link to={isAuthenticated ? dashboardPath : "/login"} className="lime-button">
                 Enter the showcase <ArrowUpRight size={18} />
               </Link>
             </motion.div>

@@ -372,6 +372,22 @@ public static class DbSeeder
             }
         }
 
+        // Ensure EVERY active citizen has an assigned valid ward randomly selected from available wards
+        var allWardsList = await context.Wards.ToListAsync();
+        if (allWardsList.Any())
+        {
+            var allActiveCitizens = await context.Users.Where(u => u.Role == "Citizen" && u.Status == "Active").ToListAsync();
+            var rnd = new Random(42);
+            foreach (var cUser in allActiveCitizens)
+            {
+                if (cUser.WardId == null || cUser.WardId == 0)
+                {
+                    cUser.WardId = allWardsList[rnd.Next(allWardsList.Count)].WardId;
+                    await userManager.UpdateAsync(cUser);
+                }
+            }
+        }
+
         // 8. New Pending Approval Accounts for Admin Approvals Testing
         var pendingAccounts = new[]
         {
@@ -383,9 +399,9 @@ public static class DbSeeder
         foreach (var p in pendingAccounts)
         {
             var user = await userManager.FindByEmailAsync(p.Email);
+            var assignedWard = !string.IsNullOrEmpty(p.Ward) ? FindWardByKeyword(p.Ward) : null;
             if (user == null)
             {
-                var assignedWard = !string.IsNullOrEmpty(p.Ward) ? FindWardByKeyword(p.Ward) : null;
                 user = new ApplicationUser
                 {
                     UserName = p.Email,
@@ -395,12 +411,22 @@ public static class DbSeeder
                     PhoneNumber = p.Phone,
                     Role = p.Role,
                     Status = "PendingApproval",
-                    WardId = p.Role == "Citizen" ? assignedWard?.WardId : null,
-                    RequestedWardId = p.Role == "WardOfficer" ? assignedWard?.WardId : null,
+                    WardId = null,
+                    RequestedWardId = (p.Role == "Citizen" || p.Role == "WardOfficer") ? assignedWard?.WardId : null,
                     EmailConfirmed = false
                 };
                 await userManager.CreateAsync(user, "Pass1234!");
                 await userManager.AddToRoleAsync(user, p.Role);
+            }
+            else
+            {
+                if (p.Role == "Citizen")
+                {
+                    user.RequestedWardId = assignedWard?.WardId;
+                    user.WardId = null;
+                    user.Status = "PendingApproval";
+                    await userManager.UpdateAsync(user);
+                }
             }
         }
 

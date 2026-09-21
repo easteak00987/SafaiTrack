@@ -68,13 +68,14 @@ public class AuthController : ControllerBase
         var canonicalRole = AllowedRoles.First(r => r.Equals(dto.Role, StringComparison.OrdinalIgnoreCase));
 
 
-        if (canonicalRole == "WardOfficer")
+        if (canonicalRole is "WardOfficer" or "Citizen")
         {
-            if (!dto.RequestedWardId.HasValue)
+            var targetWard = dto.RequestedWardId ?? dto.WardId;
+            if (!targetWard.HasValue)
             {
                 return BadRequest(new { message = "Which ward are you applying for? Please select a ward." });
             }
-            var wardExists = await _db.Wards.AnyAsync(w => w.WardId == dto.RequestedWardId.Value);
+            var wardExists = await _db.Wards.AnyAsync(w => w.WardId == targetWard.Value);
             if (!wardExists)
             {
                 return BadRequest(new { message = "Selected ward does not exist." });
@@ -100,8 +101,8 @@ public class AuthController : ControllerBase
             Gender = dto.Gender,
             Role = canonicalRole,
             Status = status,
-            RequestedWardId = canonicalRole == "WardOfficer" ? dto.RequestedWardId : null,
-            WardId = dto.WardId
+            RequestedWardId = canonicalRole is "WardOfficer" or "Citizen" ? (dto.RequestedWardId ?? dto.WardId) : null,
+            WardId = canonicalRole == "Citizen" ? null : dto.WardId
         };
 
         var result = await _userManager.CreateAsync(user, dto.Password);
@@ -217,6 +218,7 @@ public class AuthController : ControllerBase
     {
         var users = await _db.Users
             .Include(u => u.RequestedWard)
+            .Include(u => u.Ward)
             .Where(u => u.Status == "PendingApproval")
             .Select(u => new
             {
@@ -226,7 +228,7 @@ public class AuthController : ControllerBase
                 u.Role,
                 u.Status,
                 u.RequestedWardId,
-                RequestedWardName = u.RequestedWard != null ? u.RequestedWard.Name : null
+                RequestedWardName = u.RequestedWard != null ? u.RequestedWard.Name : (u.Ward != null ? u.Ward.Name : null)
             })
             .ToListAsync();
         return Ok(users);
@@ -264,6 +266,15 @@ public class AuthController : ControllerBase
             else
             {
                 user.WardId = null; // city-wide pool
+            }
+
+            if (dto?.TruckId.HasValue == true)
+            {
+                var truck = await _db.Trucks.FindAsync(dto.TruckId.Value);
+                if (truck != null)
+                {
+                    // Truck assignment recognized
+                }
             }
         }
 

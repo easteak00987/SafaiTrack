@@ -87,9 +87,14 @@
 }
 .ca-person:hover,
 .ca-wage:hover {
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 16px 36px rgba(16, 59, 60, 0.16);
-  border-color: #5ea89b;
+  transform: translateY(-8px) scale(1.015) !important;
+  box-shadow: 0 20px 38px -5px rgba(16, 59, 60, 0.18), 0 8px 16px -6px rgba(16, 59, 60, 0.12) !important;
+  border-color: #5ea89b !important;
+}
+.ca-person:active,
+.ca-wage:active {
+  transform: translateY(-2px) scale(0.985) !important;
+  box-shadow: 0 10px 20px -3px rgba(16, 59, 60, 0.14) !important;
 }
 .ca-person-top {
 
@@ -211,9 +216,13 @@
   cursor: pointer;
 }
 .ca-summary > div:hover {
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 16px 36px rgba(16, 59, 60, 0.16);
-  border-color: #7bb59c;
+  transform: translateY(-8px) scale(1.015) !important;
+  box-shadow: 0 20px 38px -5px rgba(16, 59, 60, 0.18), 0 8px 16px -6px rgba(16, 59, 60, 0.12) !important;
+  border-color: #7bb59c !important;
+}
+.ca-summary > div:active {
+  transform: translateY(-2px) scale(0.985) !important;
+  box-shadow: 0 10px 20px -3px rgba(16, 59, 60, 0.14) !important;
 }
 .ca-summary > div:nth-child(1) {
   border-top-color: #0284c7;
