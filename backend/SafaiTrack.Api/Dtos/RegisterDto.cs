@@ -25,5 +25,12 @@ public class RegisterDto
     [Required]
     public string Gender { get; set; } = "Male"; // "Male", "Female", "Other"
 
+    /// <summary>
+    /// Ward the account belongs to. A citizen's ward determines who bills them for
+    /// waste collection, and a ward officer's determines whose complaints and
+    /// invoices they can see.
+    /// </summary>
+    public int? WardId { get; set; }
+
     public int? RequestedWardId { get; set; }
 }

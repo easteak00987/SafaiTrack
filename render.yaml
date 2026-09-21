@@ -1,0 +1,87 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Create both services at once with: Render dashboard -> New -> Blueprint,
+# pointed at this repository.
+#
+# The database is deliberately NOT defined here. Render's own free Postgres is
+# deleted 30 days after creation, which would take the project down mid-term.
+# Use a Neon free database instead (it does not expire) and paste its connection
+# string into DATABASE_URL below. See DEPLOYMENT.md.
+
+services:
+  # ---------------------------------------------------------------------------
+  # API. Docker is required because Render has no native .NET runtime; Render
+  # builds the image itself, so Docker is not needed on your machine.
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: safaitrack-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./backend/SafaiTrack.Api/Dockerfile
+    dockerContext: ./backend/SafaiTrack.Api
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+
+      # Generated once by Render and kept across deploys. Tokens signed with it
+      # stay valid; changing it signs everyone out.
+      - key: Jwt__Key
+        generateValue: true
+      - key: Jwt__Issuer
+        value: SafaiTrack.Api
+      - key: Jwt__Audience
+        value: SafaiTrack.Client
+
+      # Paste the Neon connection string here in the Render dashboard. The API
+      # accepts the postgres:// URI form and converts it for Npgsql.
+      - key: DATABASE_URL
+        sync: false
+
+      # Set to the client's URL once it has been created — the API rejects
+      # cross-origin calls from anywhere else.
+      - key: Cors__AllowedOrigins__0
+        sync: false
+
+      # Public URLs the payment gateway redirects to and calls back.
+      - key: SslCommerz__ApiBaseUrl
+        sync: false
+      - key: SslCommerz__ClientBaseUrl
+        sync: false
+      - key: SslCommerz__UseSandbox
+        value: "true"
+
+      # Leave unset to run the built-in simulated gateway.
+      - key: SslCommerz__StoreId
+        sync: false
+      - key: SslCommerz__StorePassword
+        sync: false
+
+  # ---------------------------------------------------------------------------
+  # Client. Static files, so this one is free with no spin-down.
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: safaitrack-client
+    runtime: static
+    buildCommand: corepack enable && cd frontend/safai-track-client && pnpm install --frozen-lockfile && pnpm run build
+    staticPublishPath: ./frontend/safai-track-client/dist/public
+    envVars:
+      # Vite inlines this at build time, so changing it needs a redeploy of this
+      # service, not just a restart. Set it to the API's URL.
+      - key: VITE_API_BASE_URL
+        sync: false
+    routes:
+      # Client-side routing. The payment gateway returns the citizen to /billing
+      # and every workspace page is a deep link; without this rewrite each one
+      # would 404 on a fresh load.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate

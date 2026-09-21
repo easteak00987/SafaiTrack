@@ -850,3 +850,82 @@
   transform-origin: center center;
 }
 
+/* Billing and payments */
+.ws-status.unpaid {
+  background: #fff0d4;
+  color: #805916;
+}
+.ws-status.processing,
+.ws-status.initiated {
+  background: #e2effb;
+  color: #21567e;
+}
+.ws-status.paid,
+.ws-status.success,
+.ws-status.healthy {
+  background: #e3f2e7;
+  color: #285e39;
+}
+.ws-status.overdue,
+.ws-status.failed {
+  background: #fce4e2;
+  color: #8b3830;
+}
+.ws-status.cancelled,
+.ws-status.lagging {
+  background: #e8edf0;
+  color: #465e68;
+}
+.ws-amount {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.ws-row .ws-when {
+  color: #61777b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.ws-pay {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 5px;
+  background: #1f4a4d;
+  color: #f2f7f7;
+  font-size: 13px;
+  cursor: pointer;
+}
+.ws-pay:hover:not(:disabled) {
+  background: #16393b;
+}
+.ws-pay:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.ws-notice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 15px;
+  border-radius: 6px;
+  margin-bottom: 18px;
+  font-size: 14px;
+}
+.ws-notice.success {
+  background: #e3f2e7;
+  color: #285e39;
+}
+.ws-notice.failed,
+.ws-notice.cancelled {
+  background: #fce4e2;
+  color: #8b3830;
+}
+.ws-subhead {
+  margin: 32px 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #24484c;
+}

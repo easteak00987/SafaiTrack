@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -10,7 +11,9 @@ using SafaiTrack.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Configure DbContext dynamically with SQL Server or PostgreSQL
+// Render (and most managed Postgres providers) inject the database as a URI in
+// DATABASE_URL, which Npgsql cannot parse. Translate it when present; a normal
+// key/value connection string in configuration still wins.
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
@@ -21,6 +24,16 @@ if (string.IsNullOrWhiteSpace(connectionString))
     }
 }
 
+// Render assigns the port to bind at runtime rather than letting the app choose.
+// This deliberately overrides ASPNETCORE_URLS — the image sets that as a fallback
+// for running outside Render, but where PORT exists it is the authoritative value.
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(port))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
+// 1. Configure DbContext dynamically with SQL Server or PostgreSQL
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
     if (!string.IsNullOrEmpty(connectionString))
@@ -52,9 +65,22 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddDefaultTokenProviders();
 
 // 3. Configure JWT Bearer Authentication
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "SafaiTrack_SuperSecret_Jwt_SigningKey_2026_DevEnvironment_AtLeast32Chars!";
+var jwtKey = builder.Configuration["Jwt:Key"];
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "SafaiTrack.Api";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "SafaiTrack.Client";
+
+if (string.IsNullOrWhiteSpace(jwtKey))
+{
+    if (!builder.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(
+            "Jwt:Key must be configured outside Development. Set it as an environment " +
+            "variable or platform secret before starting the API.");
+    }
+
+    jwtKey = "SafaiTrack_SuperSecret_Jwt_SigningKey_2026_DevEnvironment_AtLeast32Chars!";
+    builder.Configuration["Jwt:Key"] = jwtKey;
+}
 
 builder.Services.AddAuthentication(options =>
 {
@@ -86,16 +112,60 @@ builder.Services.AddHostedService<AutomaticRouteService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<RoadRoutingService>();
 
-// 5. Configure CORS allowing frontend dev origin (http://localhost:3000) with credentials
+// 4a. Billing and payments
+builder.Services.Configure<BillingOptions>(
+    builder.Configuration.GetSection(BillingOptions.SectionName));
+builder.Services.Configure<SslCommerzOptions>(
+    builder.Configuration.GetSection(SslCommerzOptions.SectionName));
+
+// Registered as a singleton so the controller can trigger a billing run on demand
+// while the same instance also drives the hourly background pass.
+builder.Services.AddSingleton<InvoiceGenerationService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<InvoiceGenerationService>());
+
+// SSLCommerz aggregates bKash, Nagad, Rocket and cards behind one merchant account.
+// Without credentials the simulated gateway takes over, so a fresh clone still runs
+// the full billing flow end to end.
+var sslCommerzOptions = builder.Configuration
+    .GetSection(SslCommerzOptions.SectionName).Get<SslCommerzOptions>() ?? new SslCommerzOptions();
+
+if (sslCommerzOptions.IsConfigured)
+{
+    builder.Services.AddHttpClient<IPaymentGateway, SslCommerzPaymentGateway>(client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(30);
+    });
+}
+else
+{
+    builder.Services.AddSingleton<IPaymentGateway, SimulatedPaymentGateway>();
+}
+
+// 5. Configure CORS
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins").Get<string[]>();
+
+if (allowedOrigins is null || allowedOrigins.Length == 0)
+{
+    allowedOrigins = ["http://localhost:3000"];
+}
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000")
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
     });
+});
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
 });
 
 // 6. Controllers
@@ -119,7 +189,7 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "Bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Enter 'Bearer' [space] and then your valid JWT token.\n\nExample: \"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\""
+        Description = "Enter 'Bearer' [space] and then your valid JWT token."
     });
 
     options.AddSecurityRequirement(_ => new OpenApiSecurityRequirement
@@ -133,44 +203,77 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+app.Logger.LogInformation(
+    sslCommerzOptions.IsConfigured
+        ? "Payments will use the SSLCommerz {Environment} gateway."
+        : "No SSLCommerz credentials found — payments will use the simulated gateway.",
+    sslCommerzOptions.UseSandbox ? "sandbox" : "live");
+
+app.UseForwardedHeaders();
+app.UseMiddleware<SerializationFailureMiddleware>();
+
+if (builder.Configuration.GetValue("Swagger:Enabled", true))
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    app.MapGet("/", () => Results.Redirect("/swagger"));
+}
+else
+{
+    app.MapGet("/", () => Results.Ok(new { service = "SafaiTrack API", status = "running" }));
 }
 
 app.UseHttpsRedirection();
-
 app.UseCors("AllowFrontend");
-
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/", () => Results.Redirect("/swagger"));
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "healthy",
+    service = "SafaiTrack API",
+    timestamp = DateTime.UtcNow
+})).AllowAnonymous();
 
 app.MapControllers();
 
-// Attempt database schema preparation and seeding
+// Bring the schema up to date and seed
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
-    try
-    {
-        var context = services.GetRequiredService<ApplicationDbContext>();
-        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    var context = services.GetRequiredService<ApplicationDbContext>();
+    var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
 
-        if (context.Database.CanConnect())
-        {
-            await context.Database.EnsureCreatedAsync();
-            await DbSeeder.SeedAsync(context, userManager, roleManager);
-        }
-    }
-    catch (Exception ex)
+    for (var attempt = 1; attempt <= 10; attempt++)
     {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogInformation("Database seeding skipped or pending migration: {Message}", ex.Message);
+        try
+        {
+            if (context.Database.IsNpgsql())
+            {
+                await context.Database.MigrateAsync();
+            }
+            else
+            {
+                await context.Database.EnsureCreatedAsync();
+            }
+
+            await DbSeeder.SeedAsync(context, userManager, roleManager);
+            logger.LogInformation("Database schema and seeding completed successfully.");
+            break;
+        }
+        catch (Exception ex) when (attempt < 10)
+        {
+            logger.LogWarning(
+                "Database not ready (attempt {Attempt}/10): {Message}. Retrying in 3s.",
+                attempt, ex.Message);
+            await Task.Delay(TimeSpan.FromSeconds(3));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Database could not be prepared or seeded. API starting anyway.");
+        }
     }
 }
 

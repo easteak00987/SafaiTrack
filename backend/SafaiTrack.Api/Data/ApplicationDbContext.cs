@@ -20,6 +20,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<RouteStop> RouteStops => Set<RouteStop>();
     public DbSet<ComplaintUpdate> ComplaintUpdates => Set<ComplaintUpdate>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<Payment> Payments => Set<Payment>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -129,6 +131,62 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasOne(rs => rs.Bin)
                   .WithMany(b => b.RouteStops)
                   .HasForeignKey(rs => rs.BinId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Configure Invoice
+        builder.Entity<Invoice>(entity =>
+        {
+            entity.HasKey(i => i.InvoiceId);
+            entity.Property(i => i.InvoiceNumber).IsRequired().HasMaxLength(40);
+            entity.Property(i => i.Status).IsRequired().HasMaxLength(20);
+            entity.Property(i => i.Currency).IsRequired().HasMaxLength(3);
+            entity.Property(i => i.Amount).HasPrecision(18, 2);
+
+            entity.HasIndex(i => i.InvoiceNumber).IsUnique();
+
+            // One collection fee per household per billing month.
+            entity.HasIndex(i => new { i.CitizenId, i.BillingPeriodStart }).IsUnique();
+            entity.HasIndex(i => new { i.WardId, i.Status });
+
+            entity.HasOne(i => i.Citizen)
+                  .WithMany()
+                  .HasForeignKey(i => i.CitizenId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(i => i.Ward)
+                  .WithMany()
+                  .HasForeignKey(i => i.WardId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Configure Payment
+        builder.Entity<Payment>(entity =>
+        {
+            entity.HasKey(p => p.PaymentId);
+            entity.Property(p => p.TransactionRef).IsRequired().HasMaxLength(64);
+            entity.Property(p => p.Gateway).IsRequired().HasMaxLength(50);
+            entity.Property(p => p.Status).IsRequired().HasMaxLength(20);
+            entity.Property(p => p.Currency).IsRequired().HasMaxLength(3);
+            entity.Property(p => p.Amount).HasPrecision(18, 2);
+            entity.Property(p => p.GatewaySessionKey).HasMaxLength(200);
+            entity.Property(p => p.ValidationId).HasMaxLength(100);
+            entity.Property(p => p.GatewayTransactionId).HasMaxLength(100);
+            entity.Property(p => p.PaymentMethod).HasMaxLength(50);
+            entity.Property(p => p.FailureReason).HasMaxLength(500);
+            entity.Property(p => p.GatewayPayload).HasMaxLength(4000);
+
+            // The gateway echoes this back on every callback, so it must resolve to one attempt.
+            entity.HasIndex(p => p.TransactionRef).IsUnique();
+
+            entity.HasOne(p => p.Invoice)
+                  .WithMany(i => i.Payments)
+                  .HasForeignKey(p => p.InvoiceId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(p => p.Citizen)
+                  .WithMany()
+                  .HasForeignKey(p => p.CitizenId)
                   .OnDelete(DeleteBehavior.Restrict);
         });
     }

@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SafaiTrack.Api.Data;
 using SafaiTrack.Api.Models;
@@ -25,24 +26,65 @@ public class BinFillSimulationService(IServiceScopeFactory scopes, ILogger<BinFi
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var connection = db.Database.GetDbConnection();
-        await connection.OpenAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.CommandText = """
-            UPDATE Bins SET CurrentFillPercent = CASE
-              WHEN CurrentFillPercent + IncrementValue > 100 THEN 100
-              ELSE CurrentFillPercent + IncrementValue END, LastUpdated = SYSUTCDATETIME()
-            OUTPUT inserted.BinId, deleted.CurrentFillPercent, inserted.CurrentFillPercent, inserted.LastUpdated, inserted.WardId, inserted.Name
-            FROM Bins CROSS APPLY (SELECT 2 + ABS(CONVERT(bigint, CHECKSUM(BinId, @Seed))) % 5 AS IncrementValue) random
-            WHERE CurrentFillPercent < 100 AND (ABS(CHECKSUM(BinId, @Seed)) % 4 = 0);
-            """;
-        var seed = command.CreateParameter();
-        seed.ParameterName = "@Seed";
-        seed.Value = Guid.NewGuid();
-        command.Parameters.Add(seed);
 
-        var updates = new List<BinUpdateResult>();
-        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        if (connection.State != ConnectionState.Open)
         {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using var command = connection.CreateCommand();
+        var updates = new List<BinUpdateResult>();
+
+        if (db.Database.IsSqlServer())
+        {
+            command.CommandText = """
+                UPDATE Bins SET CurrentFillPercent = CASE
+                  WHEN CurrentFillPercent + IncrementValue > 100 THEN 100
+                  ELSE CurrentFillPercent + IncrementValue END, LastUpdated = SYSUTCDATETIME()
+                OUTPUT inserted.BinId, deleted.CurrentFillPercent, inserted.CurrentFillPercent, inserted.LastUpdated, inserted.WardId, inserted.Name
+                FROM Bins CROSS APPLY (SELECT 2 + ABS(CONVERT(bigint, CHECKSUM(BinId, @Seed))) % 5 AS IncrementValue) random
+                WHERE CurrentFillPercent < 100 AND (ABS(CHECKSUM(BinId, @Seed)) % 4 = 0);
+                """;
+            var seed = command.CreateParameter();
+            seed.ParameterName = "@Seed";
+            seed.Value = Guid.NewGuid();
+            command.Parameters.Add(seed);
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var binId = reader.GetInt32(0);
+                var oldVal = reader.GetInt32(1);
+                var newVal = reader.GetInt32(2);
+                var timestamp = reader.GetDateTime(3);
+                var wardId = reader.GetInt32(4);
+                var binName = reader.GetString(5);
+
+                updates.Add(new BinUpdateResult(binId, oldVal, newVal, timestamp, wardId, binName));
+
+                logger.LogInformation("Automatic bin fill: BinId={BinId} Old={OldValue} New={NewValue} Timestamp={Timestamp:O}",
+                    binId, oldVal, newVal, timestamp);
+            }
+        }
+        else
+        {
+            command.CommandText = """
+                WITH locked AS (
+                    SELECT "BinId", "CurrentFillPercent" AS old_fill, "WardId", "Name"
+                    FROM "Bins"
+                    WHERE "CurrentFillPercent" < 100
+                    ORDER BY "BinId"
+                    FOR UPDATE
+                )
+                UPDATE "Bins" AS b
+                SET "CurrentFillPercent" = LEAST(l.old_fill + (floor(random() * 8)::int + 1), 100),
+                    "LastUpdated" = now()
+                FROM locked AS l
+                WHERE b."BinId" = l."BinId"
+                RETURNING b."BinId", l.old_fill, b."CurrentFillPercent", b."LastUpdated", l."WardId", l."Name";
+                """;
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
                 var binId = reader.GetInt32(0);

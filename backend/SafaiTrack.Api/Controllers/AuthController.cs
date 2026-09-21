@@ -86,6 +86,11 @@ public class AuthController : ControllerBase
         var rawPhone = dto.PhoneNumber?.Trim() ?? "";
         var formattedPhone = rawPhone.StartsWith("+88") ? rawPhone : (rawPhone.StartsWith("88") ? $"+{rawPhone}" : $"+88{rawPhone}");
 
+        if (dto.WardId is { } wardId && !await _db.Wards.AnyAsync(w => w.WardId == wardId))
+        {
+            return BadRequest(new { message = $"Ward with ID {wardId} does not exist." });
+        }
+
         var user = new ApplicationUser
         {
             UserName = dto.Email,
@@ -96,7 +101,7 @@ public class AuthController : ControllerBase
             Role = canonicalRole,
             Status = status,
             RequestedWardId = canonicalRole == "WardOfficer" ? dto.RequestedWardId : null,
-            WardId = null
+            WardId = dto.WardId
         };
 
         var result = await _userManager.CreateAsync(user, dto.Password);

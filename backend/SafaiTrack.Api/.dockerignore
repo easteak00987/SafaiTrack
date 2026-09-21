@@ -1,0 +1,8 @@
+bin/
+obj/
+**/bin/
+**/obj/
+Dockerfile
+.dockerignore
+*.user
+.vs/

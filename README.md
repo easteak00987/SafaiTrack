@@ -4,7 +4,7 @@
 
 SafaiTrack digitizes ward-level solid-waste collection in Dhaka — replacing fixed, condition-blind truck schedules and informal, untracked citizen complaints with a simulated-sensor-driven bin monitoring system, an algorithmic route optimizer, and a structured, trackable complaint channel.
 
-Built on **ASP.NET Core (C#)**, **SQL Server**, and **React + TypeScript**, as a course project for CSE 3200 (Software Development V), aligned with **UN SDG 11** (Sustainable Cities and Communities) and **SDG 12** (Responsible Consumption and Production).
+Built on **ASP.NET Core (C#)**, **PostgreSQL**, and **React + TypeScript**, as a course project for CSE 3200 (Software Development V), aligned with **UN SDG 11** (Sustainable Cities and Communities) and **SDG 12** (Responsible Consumption and Production).
 
 ---
 
@@ -67,7 +67,7 @@ Since large-scale IoT bin sensors are outside the budget and hardware scope of t
 | Layer | Technology |
 |---|---|
 | **Backend** | ASP.NET Core (C#) Web API |
-| **Database** | Microsoft SQL Server, Entity Framework Core (Database-First, 3NF, 18 entities) |
+| **Database** | PostgreSQL, Entity Framework Core (Code-First migrations, 3NF) |
 | **Frontend** | React + TypeScript + Vite |
 | **Styling** | Tailwind CSS v4 + shadcn/ui (Radix primitives) |
 | **Animation** | Motion |
@@ -85,7 +85,7 @@ The system is organized into three cooperating layers:
 
 - **Presentation Layer** — citizen-facing bin status reporting and complaint filing; admin-facing bin/ward/category management, route generation, and analytics; driver-facing route execution; ward-officer complaint handling.
 - **Application/Logic Layer** — route optimization logic, complaint-status workflow with a full audit trail, and simulated bin-fill data generation, exposed through a RESTful Web API.
-- **Data Layer** — SQL Server database implementing an 18-entity, third-normal-form (3NF) schema covering Identity (User supertype with Citizen / Municipal Staff / Truck Driver / Ward Officer subtypes), City/Bin/Sensor data, Fleet/Routing/Collection, and Complaints/Alerts.
+- **Data Layer** — PostgreSQL database implementing an 18-entity, third-normal-form (3NF) schema covering Identity (User supertype with Citizen / Municipal Staff / Truck Driver / Ward Officer subtypes), City/Bin/Sensor data, Fleet/Routing/Collection, and Complaints/Alerts.
 
 ---
 
@@ -114,7 +114,7 @@ SafaiTrack/
 | Tool | Version | Notes |
 |---|---|---|
 | **.NET SDK** | 8/9+ | `dotnet --version` to check |
-| **SQL Server** | Express or Developer | Local instance (e.g. `.\SQLEXPRESS`) |
+| **PostgreSQL** | 14+ | Local instance, or a free hosted one (Neon) |
 | **Node.js** | v20+ | `node --version` to check |
 | **Git** | Any | For cloning the repository |
 
@@ -145,7 +145,7 @@ dotnet run --launch-profile http
 
 - API Server: `http://localhost:5281`
 - Swagger UI: `http://localhost:5281/swagger`
-- Database: Microsoft SQL Server (`SafaiTrackDb` on `localhost\SQLEXPRESS`)
+- Database: PostgreSQL (`safaitrack`), migrated automatically on first run
 
 ### Running the End-to-End Automated Test Suite
 

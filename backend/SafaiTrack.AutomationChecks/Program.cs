@@ -7,7 +7,11 @@ using SafaiTrack.Api.Services;
 var services = new ServiceCollection();
 services.AddScoped<IRouteOptimizerService, RouteOptimizerService>();
 services.AddLogging(b => b.AddConsole());
-services.AddDbContext<ApplicationDbContext>(o => o.UseSqlServer("Server=localhost\\SQLEXPRESS;Database=SafaiTrackDb;Trusted_Connection=True;TrustServerCertificate=True"));
+// Point at a scratch database, not the one the app is using — this probe writes and
+// deletes rows. Override with SAFAITRACK_CHECKS_CONNECTION.
+var checksConnection = Environment.GetEnvironmentVariable("SAFAITRACK_CHECKS_CONNECTION")
+    ?? "Host=localhost;Port=5432;Database=safaitrack;Username=postgres;Password=postgres";
+services.AddDbContext<ApplicationDbContext>(o => o.UseNpgsql(checksConnection));
 using var provider = services.BuildServiceProvider();
 using var scope = provider.CreateScope();
 var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
