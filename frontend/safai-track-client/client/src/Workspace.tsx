@@ -11,15 +11,19 @@ import {
   useParams,
 } from "react-router-dom";
 import {
+  Camera,
   Check,
   ClipboardList,
   LayoutDashboard,
   LogOut,
   MapPin,
+  Maximize2,
   Navigation,
   Plus,
   RefreshCw,
+  Shield,
   Truck,
+  X,
 } from "lucide-react";
 import { useAuth } from "./contexts/AuthContext";
 import { apiClient, apiError } from "./lib/api-client";
@@ -33,9 +37,12 @@ type Complaint = {
   complaintId: number;
   binId: number;
   binName: string;
+  wardId?: number;
+  wardName?: string;
   citizenName: string;
   category: string;
   description: string;
+  photoUrl?: string | null;
   status: string;
   createdAt: string;
 };
@@ -56,7 +63,7 @@ type CollectionRoute = {
 };
 type Ward = { wardId: number; name: string };
 type Vehicle = { truckId: number; plateNumber: string; status: string };
-type Driver = { id: string; fullName: string; wardId: number };
+type Driver = { id: string; fullName: string; email?: string; wardId: number; isBusy?: boolean };
 const roleNames: Record<string, string> = {
   Citizen: "Citizen",
   Driver: "Truck Driver",
@@ -106,7 +113,9 @@ function useData<T>(path: string | null) {
     setLoading(true);
     setError("");
     try {
-      setData((await apiClient.get<T>(path)).data);
+      const sep = path.includes("?") ? "&" : "?";
+      const res = await apiClient.get<T>(`${path}${sep}_t=${Date.now()}`);
+      setData(res.data);
     } catch (e) {
       setError(apiError(e));
     } finally {
@@ -159,6 +168,15 @@ function Shell() {
             icon: Navigation,
           },
           { to: "/operations/fleet", label: "Fleet", icon: Truck },
+        ]
+      : []),
+    ...(user?.role === "Admin"
+      ? [
+          {
+            to: "/operations/approvals",
+            label: "Pending approvals",
+            icon: Shield,
+          },
         ]
       : []),
   ];
@@ -235,9 +253,14 @@ function ComplaintRows({
           <div>
             <strong>
               #{c.complaintId} {c.category}
+              {c.photoUrl && (
+                <span className="ws-photo-tag" title="Photo attached">
+                  <Camera size={12} /> Photo
+                </span>
+              )}
             </strong>
             <small>
-              {c.binName}
+              {c.wardName ? `[${c.wardName}] ` : c.wardId ? `[Ward ${c.wardId}] ` : ""}{c.binName}
               {staff ? ` / ${c.citizenName}` : ""}
             </small>
             <small>{when(c.createdAt)}</small>
@@ -417,10 +440,16 @@ function Complaints() {
   const { user } = useAuth();
   const resource = useData<Complaint[]>("/api/complaints");
   const [filter, setFilter] = useState("All");
+  const pageTitle =
+    user?.role === "Citizen"
+      ? "My complaints"
+      : user?.role === "Admin"
+        ? "All City Complaints"
+        : "Ward complaints";
   return (
     <>
       <Heading
-        title={user?.role === "Citizen" ? "My complaints" : "Ward complaints"}
+        title={pageTitle}
       >
         <select
           aria-label="Filter complaints"
@@ -465,7 +494,8 @@ function ComplaintDetail() {
     }[]
   >(`/api/complaints/${id}/updates`);
   const [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [zoomedPhoto, setZoomedPhoto] = useState(false);
   const c = resource.data;
   const staff = user?.role !== "Citizen";
   if (!c)
@@ -491,9 +521,66 @@ function ComplaintDetail() {
       </Heading>
       <h2>{c.category}</h2>
       <p>
-        {c.binName} / Filed {when(c.createdAt)}
+        {c.wardName ? `${c.wardName} / ` : c.wardId ? `Ward ${c.wardId} / ` : ""}{c.binName} / Filed {when(c.createdAt)}
       </p>
       <p className="ws-description">{c.description}</p>
+      {c.photoUrl ? (
+        <div className="ws-complaint-photo-container">
+          <div className="ws-complaint-photo-topbar">
+            <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: "#1e293b" }}>
+              <Camera size={18} style={{ color: "#0284c7" }} />
+              Attached Photo Evidence
+            </span>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <button
+                type="button"
+                className="ws-photo-view-btn"
+                onClick={() => setZoomedPhoto(true)}
+              >
+                <Maximize2 size={15} /> Expand Photo
+              </button>
+              <a
+                href={c.photoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="ws-photo-view-btn"
+                style={{ textDecoration: "none" }}
+              >
+                Open in new tab ↗
+              </a>
+            </div>
+          </div>
+          <div className="ws-complaint-photo-frame" onClick={() => setZoomedPhoto(true)}>
+            <img
+              src={c.photoUrl}
+              alt={`Evidence for complaint #${c.complaintId}`}
+              className="ws-complaint-photo-image"
+            />
+            <div className="ws-photo-overlay-hint">
+              <Maximize2 size={16} /> Click to zoom in
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="ws-complaint-no-photo-badge">
+          <small style={{ color: "#64748b" }}>No photo evidence attached to this complaint.</small>
+        </div>
+      )}
+      {zoomedPhoto && c.photoUrl && (
+        <div className="ws-photo-modal-backdrop" onClick={() => setZoomedPhoto(false)}>
+          <div className="ws-photo-modal-content" onClick={e => e.stopPropagation()}>
+            <div className="ws-photo-modal-header">
+              <strong>Complaint #{c.complaintId} — Attached Photo Evidence</strong>
+              <button type="button" onClick={() => setZoomedPhoto(false)} className="ws-photo-modal-close">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="ws-photo-modal-body">
+              <img src={c.photoUrl} alt={`Full evidence for complaint #${c.complaintId}`} />
+            </div>
+          </div>
+        </div>
+      )}
       <h2>Progress & replies</h2>
       <div className="ws-timeline">
         <p>
@@ -561,6 +648,65 @@ function Report() {
   const navigate = useNavigate();
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const [photoData, setPhotoData] = useState<string | null>(null);
+  const [photoName, setPhotoName] = useState<string>("");
+  const [photoSize, setPhotoSize] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please select an image file (JPG, JPEG, PNG, WEBP, etc.)");
+      return;
+    }
+
+    setPhotoName(file.name);
+    setPhotoSize(file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`);
+    setError("");
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const maxDim = 1280;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            setPhotoData(canvas.toDataURL(file.type.includes("png") ? "image/png" : "image/jpeg", 0.85));
+            return;
+          }
+        }
+        setPhotoData(dataUrl);
+      };
+      img.onerror = () => setPhotoData(dataUrl);
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removePhoto = () => {
+    setPhotoData(null);
+    setPhotoName("");
+    setPhotoSize("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   return (
     <>
       <Heading title="Report an issue" />
@@ -578,6 +724,7 @@ function Report() {
               binId: Number(form.get("bin")),
               category: form.get("category"),
               description: form.get("description"),
+              photoUrl: photoData || null,
             });
             navigate(`/citizen/complaints/${data.complaintId}`);
           } catch (err) {
@@ -613,6 +760,46 @@ function Report() {
           Description
           <textarea name="description" required maxLength={1000} rows={5} />
         </label>
+        <div className="ws-field ws-photo-upload-group">
+          <label className="ws-photo-label" htmlFor="complaint-photo-input">
+            Photo evidence (optional)
+            <small>Supports any image format (JPG, JPEG, PNG, WEBP, etc.)</small>
+          </label>
+          <input
+            id="complaint-photo-input"
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={handlePhotoSelect}
+          />
+          {!photoData ? (
+            <button
+              type="button"
+              className="ws-photo-picker-button"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Camera size={20} />
+              <span>Attach a photo of the bin or issue</span>
+            </button>
+          ) : (
+            <div className="ws-photo-preview-box">
+              <img src={photoData} alt="Complaint preview thumbnail" className="ws-photo-preview-thumb" />
+              <div className="ws-photo-preview-details">
+                <strong>{photoName || "Uploaded photo"}</strong>
+                <small>{photoSize}</small>
+                <div className="ws-photo-preview-actions">
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="ws-photo-action-btn">
+                    Change photo
+                  </button>
+                  <button type="button" onClick={removePhoto} className="ws-photo-remove-btn">
+                    <X size={15} /> Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
         <button className="primary" disabled={busy || !bins.data?.length}>
           <Plus size={16} />
           {busy ? "Submitting..." : "Submit complaint"}
@@ -717,12 +904,20 @@ function RouteRows({
   );
 }
 function DriverRoutes({ rows, reload }: { rows: CollectionRoute[]; reload: () => Promise<void> }) {
+  const navigate = useNavigate();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const awaiting = rows.filter(r => r.status === "AwaitingAcceptance" || r.status === "Planned");
   const respond = async (id: number, decision: string) => {
     setBusy(true); setError("");
-    try { await apiClient.put(`/api/routes/${id}/${decision}`); await reload(); }
+    try {
+      await apiClient.put(`/api/routes/${id}/${decision}`);
+      if (decision === "accept") {
+        navigate(`/driver/route/${id}`);
+      } else {
+        await reload();
+      }
+    }
     catch (e) { setError(apiError(e)); }
     finally { setBusy(false); }
   };
@@ -771,6 +966,14 @@ function Dispatch({ onDispatch, pending }: { onDispatch: () => void; pending?: C
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const navigate = useNavigate();
+
+  // Auto-select ward when officer has only one ward available
+  useEffect(() => {
+    if (!pending && wards.data && wards.data.length === 1 && ward === "") {
+      setWard(String(wards.data[0].wardId));
+    }
+  }, [wards.data, pending, ward]);
+
   return (
     <form
       className="ws-dispatch"
@@ -835,13 +1038,11 @@ function Dispatch({ onDispatch, pending }: { onDispatch: () => void; pending?: C
             defaultValue=""
           >
             <option value="">Select driver</option>
-            {drivers.data
-              ?.filter(d => d.wardId === Number(ward))
-              .map(d => (
-                <option key={d.id} value={d.id}>
-                  {d.fullName}
-                </option>
-              ))}
+            {drivers.data?.map(d => (
+              <option key={d.id} value={d.id} disabled={d.isBusy}>
+                {d.fullName} {d.wardId ? `[Ward ${d.wardId}]` : "[City Pool]"}{d.email ? ` (${d.email})` : ""}{d.isBusy ? " — [On Route]" : ""}
+              </option>
+            ))}
           </select>
         </label>
         <label>
@@ -878,7 +1079,9 @@ function RouteDetail() {
   const { user } = useAuth();
   const resource = useData<CollectionRoute>(`/api/routes/${id}`);
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [focusedIndex, setFocusedIndex] = useState<number | undefined>(),
+    [refreshing, setRefreshing] = useState(false);
   const route = resource.data;
   const actionBusy = useRef(false);
   const action = async (suffix: string): Promise<boolean> => {
@@ -900,24 +1103,41 @@ function RouteDetail() {
       setBusy(false);
     }
   };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await resource.reload();
+    } finally {
+      setTimeout(() => setRefreshing(false), 500);
+    }
+  };
+
   if (!route)
     return (
       <>
         <ErrorBox message={resource.error} retry={resource.reload} />
-        {resource.loading && <p>Loading route...</p>}
+        {resource.loading ? <p>Loading route...</p> : !resource.error ? <p className="ws-empty">Route #{id} not found.</p> : null}
       </>
     );
   const next = route.stops.find(s => !s.collectedAt),
-    driver = user?.role === "Driver";
+    driver = user?.role === "Driver",
+    staff = user?.role === "Admin" || user?.role === "WardOfficer";
+
   return (
     <>
       <Heading title={`Route #${route.routeId}`}>
         <Status value={route.status} />
-        <button onClick={resource.reload}>
-          <RefreshCw size={16} />
-          Refresh
+        <button
+          type="button"
+          disabled={busy || refreshing}
+          onClick={handleRefresh}
+          title="Reload route status and stops"
+        >
+          <RefreshCw size={16} className={refreshing ? "ws-spin" : ""} />
+          {refreshing ? "Refreshing..." : "Refresh"}
         </button>
-        {["Planned", "Pending", "AwaitingAcceptance"].includes(route.status) && (
+        {staff && ["Planned", "Pending", "AwaitingAcceptance"].includes(route.status) && (
           <button disabled={busy} onClick={() => action("optimize")}>
             <RefreshCw size={16} />
             Optimize stops
@@ -951,11 +1171,11 @@ function RouteDetail() {
       </p>
       <p>
         {route.collectedStopsCount} of {route.stopsCount} stops collected.
-        Estimated straight-line distance: {route.totalDistanceKm.toFixed(2)} km.
+        Estimated straight-line distance: {(route.totalDistanceKm ?? 0).toFixed(2)} km.
       </p>
       <ErrorBox message={error || resource.error} />
       {!driver && route.status === "Pending" && <Dispatch pending={route} onDispatch={resource.reload} />}
-      <CollectionMap stops={route.stops} route routeId={route.routeId} motion={driver ? {
+      <CollectionMap stops={route.stops} route routeId={route.routeId} focusedIndex={focusedIndex} motion={driver ? {
         routeId: route.routeId, active: route.status === "InProgress",
         collect: index => action(`stops/${route.stops[index].routeStopId}/collect`),
         complete: () => action("complete"),
@@ -963,13 +1183,18 @@ function RouteDetail() {
       <h2>Collection order</h2>
       <div className="ws-list">
         {route.stops.map((s, index) => (
-          <div className="ws-row" key={s.routeStopId}>
+          <div
+            className={`ws-row ws-row-clickable ${focusedIndex === index ? "ws-row-focused" : ""}`}
+            key={s.routeStopId}
+            onClick={() => setFocusedIndex(index)}
+            title="Click to locate and focus on map"
+          >
             <span className="ws-number">{index + 1}</span>
             <div className="ws-grow">
               <strong>{s.name}</strong>
               <small>
-                {s.currentFillPercent}% full / {s.latitude.toFixed(5)},{" "}
-                {s.longitude.toFixed(5)}
+                {s.currentFillPercent}% full / {(s.latitude ?? 0).toFixed(5)},{" "}
+                {(s.longitude ?? 0).toFixed(5)} — <span style={{ color: "#0284c7", fontWeight: 600 }}>📍 Focus on map</span>
               </small>
               {s.collectedAt && <small>Collected {when(s.collectedAt)}</small>}
             </div>
@@ -1084,6 +1309,175 @@ function Fleet() {
     </>
   );
 }
+
+interface PendingUser {
+  id: string;
+  fullName: string;
+  email: string;
+  role: string;
+  status: string;
+  requestedWardId: number | null;
+  requestedWardName: string | null;
+}
+
+function PendingApprovals() {
+  const resource = useData<PendingUser[]>("/api/auth/pending-approvals");
+  const wards = useData<Ward[]>("/api/workspace/wards");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [selectedWards, setSelectedWards] = useState<Record<string, number | "">>({});
+
+  const handleApprove = async (user: PendingUser) => {
+    setBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      const wardId =
+        user.role === "WardOfficer"
+          ? (selectedWards[user.id] !== undefined && selectedWards[user.id] !== ""
+              ? Number(selectedWards[user.id])
+              : user.requestedWardId)
+          : (selectedWards[user.id] ? Number(selectedWards[user.id]) : null);
+
+      if (user.role === "WardOfficer" && !wardId) {
+        setError(`Please select an assigned ward for officer ${user.fullName}.`);
+        setBusy(false);
+        return;
+      }
+
+      await apiClient.put(`/api/auth/pending-approvals/${user.id}/approve`, {
+        wardId: wardId || null,
+      });
+      setSuccess(`Approved ${user.fullName} (${roleNames[user.role] || user.role}).`);
+      await resource.reload();
+    } catch (err) {
+      setError(apiError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReject = async (user: PendingUser) => {
+    if (!window.confirm(`Are you sure you want to reject and remove the registration for ${user.fullName}?`)) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      await apiClient.delete(`/api/auth/pending-approvals/${user.id}/reject`);
+      setSuccess(`Rejected and removed application for ${user.fullName}.`);
+      await resource.reload();
+    } catch (err) {
+      setError(apiError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <Heading title="Pending Staff Approvals" />
+      <ErrorBox message={resource.error || error} retry={resource.reload} />
+      {success && (
+        <div style={{ padding: "0.75rem 1rem", borderRadius: 8, background: "#ecfdf5", border: "1px solid #10b981", color: "#065f46", marginBottom: "1rem" }}>
+          {success}
+        </div>
+      )}
+      {resource.loading && <p>Loading pending accounts...</p>}
+      {!resource.loading && (!resource.data || resource.data.length === 0) && (
+        <p className="ws-empty">No pending staff registrations requiring approval.</p>
+      )}
+      <div className="ws-list">
+        {resource.data?.map(u => (
+          <div className="ws-row" key={u.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", padding: "1rem" }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: "1.05rem" }}>{u.fullName}</div>
+              <div style={{ color: "#64748b", fontSize: "0.875rem" }}>
+                {u.email} &bull; <span style={{ fontWeight: 500, color: "#1e293b" }}>{roleNames[u.role] || u.role}</span>
+              </div>
+              {u.role === "WardOfficer" && (
+                <div style={{ fontSize: "0.85rem", color: "#0284c7", marginTop: 4 }}>
+                  Requested Ward: <strong>{u.requestedWardName ? `${u.requestedWardName} (Ward ${u.requestedWardId})` : (u.requestedWardId ? `Ward ${u.requestedWardId}` : "None")}</strong>
+                </div>
+              )}
+              {u.role === "Driver" && (
+                <div style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 4 }}>
+                  Role: City-wide pool driver (default) or assign to specific ward below
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.875rem" }}>
+                <span>Assign Ward:</span>
+                <select
+                  value={
+                    selectedWards[u.id] !== undefined
+                      ? selectedWards[u.id]
+                      : (u.requestedWardId ? String(u.requestedWardId) : "")
+                  }
+                  onChange={e =>
+                    setSelectedWards(prev => ({
+                      ...prev,
+                      [u.id]: e.target.value ? Number(e.target.value) : "",
+                    }))
+                  }
+                  style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #cbd5e1" }}
+                >
+                  <option value="">{u.role === "Driver" ? "City-wide Pool (Unassigned)" : "-- Select Ward --"}</option>
+                  {wards.data?.map(w => (
+                    <option key={w.wardId} value={w.wardId}>
+                      Ward {w.wardId} - {w.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => handleApprove(u)}
+                style={{
+                  background: "#10b981",
+                  color: "#fff",
+                  border: "none",
+                  padding: "6px 14px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontWeight: 500,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4
+                }}
+              >
+                <Check size={16} /> Approve
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => handleReject(u)}
+                style={{
+                  background: "#ef4444",
+                  color: "#fff",
+                  border: "none",
+                  padding: "6px 14px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontWeight: 500
+                }}
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 function HomeRedirect() {
   const { user } = useAuth();
   return <Navigate to={home(user?.role)} replace />;
@@ -1128,7 +1522,14 @@ export default function WorkspaceRoutes({
           </Route>
           <Route element={<Guard roles={["Admin"]} />}>
             <Route path="/admin/dashboard" element={<Dashboard />} />
+            <Route path="/admin/complaints" element={<Complaints />} />
+            <Route path="/admin/complaints/:id" element={<ComplaintDetail />} />
+            <Route path="/admin/bins" element={<Bins />} />
+            <Route path="/admin/routes" element={<RouteList />} />
+            <Route path="/admin/routes/:id" element={<RouteDetail />} />
             <Route path="/admin/fleet" element={<Fleet />} />
+            <Route path="/operations/approvals" element={<PendingApprovals />} />
+            <Route path="/admin/approvals" element={<PendingApprovals />} />
           </Route>
           <Route element={<Guard roles={["Admin", "WardOfficer"]} />}>
             <Route path="/operations/complaints" element={<Complaints />} />
@@ -1140,6 +1541,11 @@ export default function WorkspaceRoutes({
             <Route path="/operations/routes" element={<RouteList />} />
             <Route path="/operations/routes/:id" element={<RouteDetail />} />
             <Route path="/operations/fleet" element={<Fleet />} />
+            <Route path="/ward/bins" element={<Bins />} />
+            <Route path="/ward/complaints" element={<Complaints />} />
+            <Route path="/ward/complaints/:id" element={<ComplaintDetail />} />
+            <Route path="/ward/routes" element={<RouteList />} />
+            <Route path="/ward/routes/:id" element={<RouteDetail />} />
           </Route>
           <Route path="*" element={<HomeRedirect />} />
         </Route>

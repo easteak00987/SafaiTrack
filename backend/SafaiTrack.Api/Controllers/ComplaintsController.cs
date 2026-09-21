@@ -29,7 +29,7 @@ public class ComplaintsController : ControllerBase
         var isStaff = User.IsInRole("Admin") || User.IsInRole("WardOfficer");
 
         var query = _context.Complaints
-            .Include(c => c.Bin)
+            .Include(c => c.Bin).ThenInclude(b => b!.Ward)
             .Include(c => c.Citizen)
             .AsNoTracking();
 
@@ -51,10 +51,13 @@ public class ComplaintsController : ControllerBase
                 ComplaintId = c.ComplaintId,
                 BinId = c.BinId,
                 BinName = c.Bin != null ? c.Bin.Name : null,
+                WardId = c.Bin != null ? c.Bin.WardId : null,
+                WardName = c.Bin != null && c.Bin.Ward != null ? c.Bin.Ward.Name : null,
                 CitizenId = c.CitizenId,
                 CitizenName = c.Citizen != null ? c.Citizen.FullName : null,
                 Category = c.Category,
                 Description = c.Description,
+                PhotoUrl = c.PhotoUrl,
                 Status = c.Status,
                 CreatedAt = c.CreatedAt,
                 ResolvedAt = c.ResolvedAt
@@ -68,7 +71,7 @@ public class ComplaintsController : ControllerBase
     public async Task<ActionResult<ComplaintResponseDto>> GetComplaint(int id)
     {
         var complaint = await _context.Complaints
-            .Include(c => c.Bin)
+            .Include(c => c.Bin).ThenInclude(b => b!.Ward)
             .Include(c => c.Citizen)
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.ComplaintId == id);
@@ -93,10 +96,13 @@ public class ComplaintsController : ControllerBase
             ComplaintId = complaint.ComplaintId,
             BinId = complaint.BinId,
             BinName = complaint.Bin?.Name,
+            WardId = complaint.Bin?.WardId,
+            WardName = complaint.Bin?.Ward?.Name,
             CitizenId = complaint.CitizenId,
             CitizenName = complaint.Citizen?.FullName,
             Category = complaint.Category,
             Description = complaint.Description,
+            PhotoUrl = complaint.PhotoUrl,
             Status = complaint.Status,
             CreatedAt = complaint.CreatedAt,
             ResolvedAt = complaint.ResolvedAt
@@ -118,7 +124,7 @@ public class ComplaintsController : ControllerBase
             return Unauthorized(new { message = "User not authenticated." });
         }
 
-        var bin = await _context.Bins.FindAsync(dto.BinId);
+        var bin = await _context.Bins.Include(b => b.Ward).FirstOrDefaultAsync(b => b.BinId == dto.BinId);
         if (bin == null)
         {
             return BadRequest(new { message = $"Bin with ID {dto.BinId} does not exist." });
@@ -132,6 +138,7 @@ public class ComplaintsController : ControllerBase
             CitizenId = userId,
             Category = dto.Category,
             Description = dto.Description,
+            PhotoUrl = dto.PhotoUrl,
             Status = "Pending",
             CreatedAt = DateTime.UtcNow
         };
@@ -139,15 +146,71 @@ public class ComplaintsController : ControllerBase
         await _context.Complaints.AddAsync(complaint);
         await _context.SaveChangesAsync();
 
+        // 1. Notification to Citizen
+        _context.Notifications.Add(new Notification
+        {
+            UserId = userId,
+            RelatedComplaintId = complaint.ComplaintId,
+            Title = "Complaint Submitted",
+            Message = $"Complaint #{complaint.ComplaintId} ({complaint.Category}) at {bin.Name} reported to Ward Officer and City Admins. Status: Pending.",
+            Category = "info",
+            Link = $"/citizen/complaints/{complaint.ComplaintId}",
+            IsRead = false,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        // 2. Notification to Ward Officer(s)
+        var wardOfficers = await _context.Users
+            .Where(u => u.Role == "WardOfficer" && u.WardId == bin.WardId && u.Status == "Active")
+            .ToListAsync();
+        foreach (var officer in wardOfficers)
+        {
+            _context.Notifications.Add(new Notification
+            {
+                UserId = officer.Id,
+                RelatedComplaintId = complaint.ComplaintId,
+                Title = "New Citizen Grievance",
+                Message = $"New grievance #{complaint.ComplaintId} ({complaint.Category}) reported at {bin.Name} by {citizen?.FullName ?? "Citizen"}. Requires inspection.",
+                Category = "alert",
+                Link = $"/ward/complaints/{complaint.ComplaintId}",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        // 3. Notification to City Admins
+        var admins = await _context.Users
+            .Where(u => u.Role == "Admin" && u.Status == "Active")
+            .ToListAsync();
+        foreach (var admin in admins)
+        {
+            _context.Notifications.Add(new Notification
+            {
+                UserId = admin.Id,
+                RelatedComplaintId = complaint.ComplaintId,
+                Title = "Civic Grievance Logged",
+                Message = $"Citizen complaint #{complaint.ComplaintId} ({complaint.Category}) submitted in Ward {bin.WardId} ({bin.Name}).",
+                Category = "info",
+                Link = $"/admin/complaints/{complaint.ComplaintId}",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        await _context.SaveChangesAsync();
+
         var responseDto = new ComplaintResponseDto
         {
             ComplaintId = complaint.ComplaintId,
             BinId = complaint.BinId,
             BinName = bin.Name,
+            WardId = bin.WardId,
+            WardName = bin.Ward?.Name,
             CitizenId = complaint.CitizenId,
             CitizenName = citizen?.FullName,
             Category = complaint.Category,
             Description = complaint.Description,
+            PhotoUrl = complaint.PhotoUrl,
             Status = complaint.Status,
             CreatedAt = complaint.CreatedAt,
             ResolvedAt = complaint.ResolvedAt
@@ -172,7 +235,7 @@ public class ComplaintsController : ControllerBase
         }
 
         var complaint = await _context.Complaints
-            .Include(c => c.Bin)
+            .Include(c => c.Bin).ThenInclude(b => b!.Ward)
             .Include(c => c.Citizen)
             .FirstOrDefaultAsync(c => c.ComplaintId == id);
 
@@ -190,13 +253,73 @@ public class ComplaintsController : ControllerBase
             return BadRequest(new { message = "Enter a reply or change the status." });
         _context.ComplaintUpdates.Add(new ComplaintUpdate { ComplaintId = id, AuthorId = actor!.Id,
             AuthorName = actor.FullName, Status = matchingStatus, Message = dto.Message?.Trim() ?? "Status updated." });
-        if (complaint.Status != matchingStatus)
+
+        if (matchingStatus == "Resolved")
         {
+            var note = !string.IsNullOrWhiteSpace(dto.Message) && dto.Message.Trim() != "Status updated."
+                ? $" Note: \"{dto.Message.Trim()}\""
+                : "";
             _context.Notifications.Add(new Notification
             {
                 UserId = complaint.CitizenId,
                 RelatedComplaintId = complaint.ComplaintId,
-                Message = $"Your complaint #{id} status changed to {matchingStatus}",
+                Title = "Complaint Resolved",
+                Message = $"Your complaint #{id} ({complaint.Category}) at {complaint.Bin?.Name ?? "bin"} was resolved by {actor.FullName}.{note}",
+                Category = "success",
+                Link = $"/citizen/complaints/{id}",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            // Notification to the resolving Ward Officer himself
+            if (User.IsInRole("WardOfficer") && actor != null)
+            {
+                _context.Notifications.Add(new Notification
+                {
+                    UserId = actor.Id,
+                    RelatedComplaintId = complaint.ComplaintId,
+                    Title = "Grievance Resolved Successfully",
+                    Message = $"You marked Complaint #{id} ({complaint.Category}) at {complaint.Bin?.Name ?? "bin"} as Resolved. Citizen was notified.{note}",
+                    Category = "success",
+                    Link = $"/operations/complaints/{id}",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+        }
+        else if (matchingStatus == "InProgress")
+        {
+            var note = !string.IsNullOrWhiteSpace(dto.Message) && dto.Message.Trim() != "Status updated."
+                ? $" Note: \"{dto.Message.Trim()}\""
+                : "";
+            _context.Notifications.Add(new Notification
+            {
+                UserId = complaint.CitizenId,
+                RelatedComplaintId = complaint.ComplaintId,
+                Title = "Complaint In Progress",
+                Message = $"Your complaint #{id} status changed to InProgress by {actor.FullName}.{note}",
+                Category = "warning",
+                Link = $"/citizen/complaints/{id}",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+        else if (!string.IsNullOrWhiteSpace(dto.Message))
+        {
+            var isIssue = dto.Message.Contains("unable", StringComparison.OrdinalIgnoreCase) ||
+                          dto.Message.Contains("cannot", StringComparison.OrdinalIgnoreCase) ||
+                          dto.Message.Contains("issue", StringComparison.OrdinalIgnoreCase) ||
+                          dto.Message.Contains("delay", StringComparison.OrdinalIgnoreCase);
+            _context.Notifications.Add(new Notification
+            {
+                UserId = complaint.CitizenId,
+                RelatedComplaintId = complaint.ComplaintId,
+                Title = isIssue ? "Complaint Issue Reported" : "Complaint Update",
+                Message = isIssue
+                    ? $"Issue encountered on complaint #{id} ({complaint.Category}): \"{dto.Message.Trim()}\""
+                    : $"Ward Officer reply on complaint #{id}: \"{dto.Message.Trim()}\"",
+                Category = isIssue ? "alert" : "info",
+                Link = $"/citizen/complaints/{id}",
                 IsRead = false,
                 CreatedAt = DateTime.UtcNow
             });
@@ -218,10 +341,13 @@ public class ComplaintsController : ControllerBase
             ComplaintId = complaint.ComplaintId,
             BinId = complaint.BinId,
             BinName = complaint.Bin?.Name,
+            WardId = complaint.Bin?.WardId,
+            WardName = complaint.Bin?.Ward?.Name,
             CitizenId = complaint.CitizenId,
             CitizenName = complaint.Citizen?.FullName,
             Category = complaint.Category,
             Description = complaint.Description,
+            PhotoUrl = complaint.PhotoUrl,
             Status = complaint.Status,
             CreatedAt = complaint.CreatedAt,
             ResolvedAt = complaint.ResolvedAt

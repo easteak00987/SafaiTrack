@@ -26,15 +26,22 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         base.OnModelCreating(builder);
         builder.Entity<Notification>(entity =>
         {
+            entity.Property(n => n.Title).HasMaxLength(200);
             entity.Property(n => n.Message).IsRequired().HasMaxLength(1000);
+            entity.Property(n => n.Category).HasMaxLength(50);
+            entity.Property(n => n.Link).HasMaxLength(300);
             entity.HasOne(n => n.User).WithMany().HasForeignKey(n => n.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(n => n.RelatedComplaint).WithMany().HasForeignKey(n => n.RelatedComplaintId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(n => n.RelatedRoute).WithMany().HasForeignKey(n => n.RelatedRouteId)
                 .OnDelete(DeleteBehavior.SetNull);
             entity.HasIndex(n => new { n.UserId, n.CreatedAt });
         });
         builder.Entity<ApplicationUser>().HasOne(u => u.Ward).WithMany()
             .HasForeignKey(u => u.WardId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<ApplicationUser>().HasOne(u => u.RequestedWard).WithMany()
+            .HasForeignKey(u => u.RequestedWardId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<ComplaintUpdate>().HasOne(u => u.Complaint).WithMany()
             .HasForeignKey(u => u.ComplaintId).OnDelete(DeleteBehavior.Cascade);
         builder.Entity<ComplaintUpdate>().Property(u => u.Message).HasMaxLength(1000);

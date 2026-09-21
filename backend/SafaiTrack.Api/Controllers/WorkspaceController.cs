@@ -11,13 +11,17 @@ namespace SafaiTrack.Api.Controllers;
 [Route("api/workspace")]
 public class WorkspaceController(ApplicationDbContext db) : ControllerBase
 {
+    [AllowAnonymous]
     [HttpGet("wards")]
     public async Task<IActionResult> Wards()
     {
-        var user = await db.Users.FindAsync(User.FindFirstValue(ClaimTypes.NameIdentifier));
         var query = db.Wards.AsNoTracking();
-        if (!User.IsInRole("Admin") && !User.IsInRole("Citizen"))
-            query = query.Where(w => w.WardId == user!.WardId);
+        if (User.Identity?.IsAuthenticated == true && !User.IsInRole("Admin") && !User.IsInRole("Citizen"))
+        {
+            var user = await db.Users.FindAsync(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            if (user?.WardId != null)
+                query = query.Where(w => w.WardId == user.WardId);
+        }
         return Ok(await query.Select(w => new { w.WardId, w.Name }).ToListAsync());
     }
 
@@ -26,8 +30,22 @@ public class WorkspaceController(ApplicationDbContext db) : ControllerBase
     public async Task<IActionResult> Drivers()
     {
         var user = await db.Users.FindAsync(User.FindFirstValue(ClaimTypes.NameIdentifier));
-        var query = db.Users.Where(u => u.Role == "Driver");
-        if (!User.IsInRole("Admin")) query = query.Where(u => u.WardId == user!.WardId);
-        return Ok(await query.Select(u => new { u.Id, u.FullName, u.WardId }).ToListAsync());
+        var busyDriverIds = await db.Routes
+            .Where(r => r.Status != "Completed" && r.DriverId != null)
+            .Select(r => r.DriverId!)
+            .ToListAsync();
+
+        var query = db.Users.Where(u => u.Role == "Driver" && u.Status == "Active");
+        if (!User.IsInRole("Admin"))
+            query = query.Where(u => u.WardId == null || u.WardId == user!.WardId);
+
+        var drivers = await query.OrderBy(u => u.FullName).Select(u => new { u.Id, u.FullName, u.Email, u.WardId }).ToListAsync();
+        return Ok(drivers.Select(d => new {
+            d.Id,
+            d.FullName,
+            d.Email,
+            d.WardId,
+            IsBusy = busyDriverIds.Contains(d.Id)
+        }));
     }
 }

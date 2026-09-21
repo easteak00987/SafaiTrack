@@ -2,6 +2,8 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SafaiTrack.Api.Data;
 using SafaiTrack.Api.Dtos;
 using SafaiTrack.Api.Models;
 using SafaiTrack.Api.Services;
@@ -18,17 +20,20 @@ public class AuthController : ControllerBase
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly ITokenService _tokenService;
+    private readonly ApplicationDbContext _db;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
         RoleManager<IdentityRole> roleManager,
-        ITokenService tokenService)
+        ITokenService tokenService,
+        ApplicationDbContext db)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _roleManager = roleManager;
         _tokenService = tokenService;
+        _db = db;
     }
 
     [HttpPost("register")]
@@ -61,13 +66,37 @@ public class AuthController : ControllerBase
 
         // Canonical casing for role
         var canonicalRole = AllowedRoles.First(r => r.Equals(dto.Role, StringComparison.OrdinalIgnoreCase));
+        var isStaff = canonicalRole is "WardOfficer" or "Driver";
+
+        if (canonicalRole == "WardOfficer")
+        {
+            if (!dto.RequestedWardId.HasValue)
+            {
+                return BadRequest(new { message = "Which ward are you applying for? Please select a ward." });
+            }
+            var wardExists = await _db.Wards.AnyAsync(w => w.WardId == dto.RequestedWardId.Value);
+            if (!wardExists)
+            {
+                return BadRequest(new { message = "Selected ward does not exist." });
+            }
+        }
+
+        var status = isStaff ? "PendingApproval" : "Active";
+
+        var rawPhone = dto.PhoneNumber?.Trim() ?? "";
+        var formattedPhone = rawPhone.StartsWith("+88") ? rawPhone : (rawPhone.StartsWith("88") ? $"+{rawPhone}" : $"+88{rawPhone}");
 
         var user = new ApplicationUser
         {
             UserName = dto.Email,
             Email = dto.Email,
             FullName = dto.FullName,
-            Role = canonicalRole
+            PhoneNumber = formattedPhone,
+            Gender = dto.Gender,
+            Role = canonicalRole,
+            Status = status,
+            RequestedWardId = canonicalRole == "WardOfficer" ? dto.RequestedWardId : null,
+            WardId = null
         };
 
         var result = await _userManager.CreateAsync(user, dto.Password);
@@ -84,6 +113,18 @@ public class AuthController : ControllerBase
         }
         await _userManager.AddToRoleAsync(user, canonicalRole);
 
+        if (isStaff)
+        {
+            return Ok(new AuthResponseDto
+            {
+                Token = string.Empty,
+                FullName = user.FullName,
+                Role = user.Role,
+                Status = "PendingApproval",
+                Message = "Your registration has been submitted and is pending admin approval."
+            });
+        }
+
         var (token, expiresAt) = _tokenService.GenerateToken(user);
 
         return Ok(new AuthResponseDto
@@ -91,6 +132,7 @@ public class AuthController : ControllerBase
             Token = token,
             FullName = user.FullName,
             Role = user.Role,
+            Status = "Active",
             ExpiresAt = expiresAt
         });
     }
@@ -103,16 +145,30 @@ public class AuthController : ControllerBase
             return BadRequest(ModelState);
         }
 
-        var user = await _userManager.FindByEmailAsync(dto.Email);
+        var input = dto.Email?.Trim() ?? "";
+        var user = await _userManager.FindByEmailAsync(input) ?? await _userManager.FindByNameAsync(input);
         if (user == null)
         {
-            return Unauthorized(new { message = "Invalid email or password." });
+            user = await _db.Users.FirstOrDefaultAsync(u => u.FullName.ToLower() == input.ToLower());
+        }
+        if (user == null && !input.Contains('@'))
+        {
+            user = await _userManager.FindByEmailAsync($"{input}@safaitrack.local") ?? await _userManager.FindByNameAsync($"{input}@safaitrack.local");
+        }
+        if (user == null)
+        {
+            return Unauthorized(new { message = "Invalid email, name, or password." });
         }
 
         var result = await _signInManager.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: false);
         if (!result.Succeeded)
         {
             return Unauthorized(new { message = "Invalid email or password." });
+        }
+
+        if (user.Status == "PendingApproval")
+        {
+            return Unauthorized(new { message = "Your registration is pending admin approval.", status = "PendingApproval" });
         }
 
         var (token, expiresAt) = _tokenService.GenerateToken(user);
@@ -122,6 +178,7 @@ public class AuthController : ControllerBase
             Token = token,
             FullName = user.FullName,
             Role = user.Role,
+            Status = user.Status,
             ExpiresAt = expiresAt
         });
     }
@@ -149,7 +206,91 @@ public class AuthController : ControllerBase
             user.FullName,
             user.Role,
             user.WardId,
+            user.Status,
+            user.RequestedWardId,
             Claims = User.Claims.Select(c => new { c.Type, c.Value })
         });
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpGet("pending-approvals")]
+    public async Task<IActionResult> GetPendingApprovals()
+    {
+        var users = await _db.Users
+            .Include(u => u.RequestedWard)
+            .Where(u => u.Status == "PendingApproval")
+            .Select(u => new
+            {
+                u.Id,
+                u.FullName,
+                u.Email,
+                u.Role,
+                u.Status,
+                u.RequestedWardId,
+                RequestedWardName = u.RequestedWard != null ? u.RequestedWard.Name : null
+            })
+            .ToListAsync();
+        return Ok(users);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPut("pending-approvals/{id}/approve")]
+    public async Task<IActionResult> ApproveUser(string id, [FromBody] ApproveUserDto? dto)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user == null) return NotFound(new { message = "User not found." });
+
+        user.Status = "Active";
+
+        if (user.Role == "WardOfficer")
+        {
+            var targetWardId = dto?.WardId ?? user.RequestedWardId;
+            if (targetWardId.HasValue)
+            {
+                var wardExists = await _db.Wards.AnyAsync(w => w.WardId == targetWardId.Value);
+                if (!wardExists) return BadRequest(new { message = "Selected ward does not exist." });
+                user.WardId = targetWardId.Value;
+            }
+        }
+        else if (user.Role == "Driver")
+        {
+            if (dto?.WardId.HasValue == true)
+            {
+                var wardExists = await _db.Wards.AnyAsync(w => w.WardId == dto.WardId.Value);
+                if (!wardExists) return BadRequest(new { message = "Selected ward does not exist." });
+                user.WardId = dto.WardId.Value;
+            }
+            else
+            {
+                user.WardId = null; // city-wide pool
+            }
+        }
+
+        var updateResult = await _userManager.UpdateAsync(user);
+        if (!updateResult.Succeeded)
+        {
+            return BadRequest(new { message = "Failed to update user status." });
+        }
+
+        return Ok(new { message = "User approved successfully.", user.Id, user.Status, user.WardId });
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpDelete("pending-approvals/{id}/reject")]
+    public async Task<IActionResult> RejectUser(string id)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user == null) return NotFound(new { message = "User not found." });
+
+        var userRoles = await _db.UserRoles.Where(ur => ur.UserId == id).ToListAsync();
+        _db.UserRoles.RemoveRange(userRoles);
+
+        var result = await _userManager.DeleteAsync(user);
+        if (!result.Succeeded)
+        {
+            return BadRequest(new { message = "Failed to delete user." });
+        }
+
+        return Ok(new { message = "User application rejected and account deleted." });
     }
 }

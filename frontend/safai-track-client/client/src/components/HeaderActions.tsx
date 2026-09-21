@@ -164,9 +164,34 @@ export function HeaderActions({ currentUser, setCurrentUser }: HeaderActionsProp
 }
 
 type StoredNotification = {
-  notificationId: number; message: string; relatedComplaintId: number | null;
-  isRead: boolean; createdAt: string;
+  notificationId: number;
+  title?: string;
+  message: string;
+  category?: string;
+  link?: string;
+  relatedComplaintId: number | null;
+  relatedRouteId?: number | null;
+  isRead: boolean;
+  createdAt: string;
 };
+
+function formatRelativeTime(dateStr: string): string {
+  try {
+    const d = new Date(/Z$|[+-]\d{2}:\d{2}$/.test(dateStr) ? dateStr : dateStr + "Z");
+    const now = new Date();
+    const diffSecs = Math.floor((now.getTime() - d.getTime()) / 1000);
+    if (isNaN(diffSecs) || diffSecs < 60) return "Just now";
+    const diffMins = Math.floor(diffSecs / 60);
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  } catch {
+    return dateStr;
+  }
+}
 
 export function NotificationAction({ currentUserRole }: { currentUserRole: UserRole }) {
   const { token } = useAuth();
@@ -175,6 +200,7 @@ export function NotificationAction({ currentUserRole }: { currentUserRole: UserR
   const [items, setItems] = useState<AppNotification[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     let active = true;
     setItems([]);
@@ -183,44 +209,96 @@ export function NotificationAction({ currentUserRole }: { currentUserRole: UserR
       try {
         const { data } = await apiClient.get<StoredNotification[]>("/api/notifications");
         if (!active) return;
-        setItems(data.map(n => ({
-          id: String(n.notificationId), role: currentUserRole,
-          title: "Complaint status updated", message: n.message, read: n.isRead,
-          category: "info", timestamp: new Date(/Z$|[+-]\d{2}:\d{2}$/.test(n.createdAt) ? n.createdAt : n.createdAt + "Z").toLocaleString(),
-          link: n.relatedComplaintId ? `/citizen/complaints/${n.relatedComplaintId}` : undefined,
-        })));
+        setItems(data.map(n => {
+          const cat = (n.category as any) || (
+            n.message.toLowerCase().includes("resolved") || n.message.toLowerCase().includes("completed") ? "success" :
+            n.message.toLowerCase().includes("investigat") || n.message.toLowerCase().includes("urgent") ? "warning" :
+            n.message.toLowerCase().includes("new grievance") || n.message.toLowerCase().includes("issue") ? "alert" : "info"
+          );
+          const title = n.title && n.title.trim() !== "" ? n.title : (
+            cat === "success" ? "Operation Completed" :
+            cat === "warning" ? "Investigation Notice" :
+            cat === "alert" ? "Action Required" : "Civic Update"
+          );
+          const link = n.link || (
+            n.relatedComplaintId ? (currentUserRole === "Citizen" ? `/citizen/complaints/${n.relatedComplaintId}` : `/ward/complaints/${n.relatedComplaintId}`) :
+            n.relatedRouteId ? (currentUserRole === "Truck Driver" ? `/driver/route` : `/ward/routes`) : undefined
+          );
+
+          return {
+            id: String(n.notificationId),
+            role: currentUserRole,
+            title,
+            message: n.message,
+            read: n.isRead,
+            category: cat,
+            timestamp: formatRelativeTime(n.createdAt),
+            link,
+          };
+        }));
         setError("");
       } catch (e) { if (active) setError(apiError(e)); }
       finally { if (active) setLoading(false); }
     };
     void refresh();
-    const timer = window.setInterval(refresh, 30000);
+    const timer = window.setInterval(refresh, 8000);
     return () => { active = false; clearInterval(timer); };
   }, [token, currentUserRole, open]);
+
   const markRead = async (item: AppNotification) => {
     if (item.read) return;
     await apiClient.put(`/api/notifications/${item.id}/read`);
     setItems(previous => previous.map(n => n.id === item.id ? { ...n, read: true } : n));
   };
+
+  const markAllRead = async () => {
+    try {
+      await apiClient.put("/api/notifications/read-all");
+      setItems(previous => previous.map(n => ({ ...n, read: true })));
+      setError("");
+      toast.success("All notifications marked as read");
+    } catch (e) {
+      setError(apiError(e));
+    }
+  };
+
   const unread = items.filter(n => !n.read).length;
-  return <div className="popover-anchor">
-    <button className={`icon-button icon-button-lg ${open ? "active" : ""}`}
-      aria-label="Notifications" title="Notifications" onClick={() => setOpen(value => !value)}>
-      <Bell size={22} strokeWidth={2.2} />
-      {unread > 0 && <span className="notification-badge-pulse">{unread}</span>}
-    </button>
-    <AnimatePresence>{open && <NotificationDrawer
-      activeRole={currentUserRole} currentUserRole={currentUserRole}
-      notifications={items} loading={loading} error={error}
-      onMarkAllRead={async () => {
-        try { await Promise.all(items.filter(n => !n.read).map(markRead)); setError(""); }
-        catch (e) { setError(apiError(e)); }
-      }}
-      onItemClick={async item => {
-        try { await markRead(item); setOpen(false); if (item.link) navigate(item.link); }
-        catch (e) { setError(apiError(e)); }
-      }} onClose={() => setOpen(false)} />}</AnimatePresence>
-  </div>;
+
+  return (
+    <div className="popover-anchor">
+      <button
+        className={`icon-button icon-button-lg ${open ? "active" : ""}`}
+        aria-label="Notifications"
+        title="Notifications"
+        onClick={() => setOpen(value => !value)}
+      >
+        <Bell size={22} strokeWidth={2.2} />
+        {unread > 0 && <span className="notification-badge-pulse">{unread}</span>}
+      </button>
+      <AnimatePresence>
+        {open && (
+          <NotificationDrawer
+            activeRole={currentUserRole}
+            currentUserRole={currentUserRole}
+            notifications={items}
+            loading={loading}
+            error={error}
+            onMarkAllRead={markAllRead}
+            onItemClick={async item => {
+              try {
+                await markRead(item);
+                setOpen(false);
+                if (item.link) navigate(item.link);
+              } catch (e) {
+                setError(apiError(e));
+              }
+            }}
+            onClose={() => setOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 // -------------------------------------------------------------

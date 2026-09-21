@@ -5,6 +5,7 @@ import { ArrowUpRight, Bell, Bike, Camera, Check, ChevronDown, ChevronRight, Cir
 import { getBinsForWardSync, computeDijkstraRoute, computeNearestNeighborRoute } from "./lib/routeOptimizer";
 import { AuthProvider } from "./contexts/AuthContext";
 import WorkspaceRoutes from "./Workspace";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -615,4 +616,4 @@ function Landing() {
   </div>
 }
 
-export default function App() { return <AuthProvider><BrowserRouter><WorkspaceRoutes landing={<Landing />} /></BrowserRouter></AuthProvider>; }
+export default function App() { return <AuthProvider><BrowserRouter><ErrorBoundary><WorkspaceRoutes landing={<Landing />} /></ErrorBoundary></BrowserRouter></AuthProvider>; }

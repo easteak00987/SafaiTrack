@@ -326,26 +326,156 @@
   border-radius: 5px;
   background: #e8edef;
 }
-.collection-marker {
+.leaflet-pin-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+.collection-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.collection-pin:hover {
+  transform: scale(1.15);
+  z-index: 999;
+}
+.collection-pin-head {
+  min-width: 32px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 13px;
   background: #176b91;
   color: #fff;
-  border: 2px solid white;
-  border-radius: 5px;
-  text-align: center;
-  line-height: 26px;
-  font-size: 12px;
+  border: 2px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
   font-weight: 700;
-  box-shadow: 0 1px 5px #0005;
+  white-space: nowrap;
 }
-.collection-marker.collected {
-  background: #398252;
+.collection-pin-tip {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 8px solid #176b91;
+  margin-top: -2px;
 }
-.collection-marker.depot {
-  background: #183d3e;
+.collection-pin.collected .collection-pin-head {
+  background: #16a34a;
+}
+.collection-pin.collected .collection-pin-tip {
+  border-top-color: #16a34a;
+}
+.collection-pin.urgent .collection-pin-head {
+  background: #dc2626;
+}
+.collection-pin.urgent .collection-pin-tip {
+  border-top-color: #dc2626;
+}
+.collection-pin.moderate .collection-pin-head {
+  background: #d97706;
+}
+.collection-pin.moderate .collection-pin-tip {
+  border-top-color: #d97706;
+}
+.collection-pin.low .collection-pin-head {
+  background: #0284c7;
+}
+.collection-pin.low .collection-pin-tip {
+  border-top-color: #0284c7;
+}
+.collection-pin.depot .collection-pin-head {
+  background: #0f172a;
+}
+.collection-pin.depot .collection-pin-tip {
+  border-top-color: #0f172a;
+}
+.map-popup-card {
+  font-family: inherit;
+  min-width: 170px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #1e293b;
+}
+.map-popup-badge {
+  display: inline-block;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+.map-popup-coords {
+  color: #64748b;
+  font-size: 11px;
+  margin-top: 4px;
+  font-family: monospace;
+}
+.ws-row-clickable {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.ws-row-clickable:hover {
+  background: #f1f7f8 !important;
+}
+.ws-row-focused {
+  background: #e6f4f7 !important;
+  border-left: 3px solid #0284c7 !important;
 }
 .ws .map-caption {
   font-size: 12px;
   color: #536b70;
+}
+.sim-panel {
+  margin-top: 8px;
+  padding: 10px 14px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sim-status {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0c4a6e;
+  margin: 0;
+}
+.sim-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sim-btn {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 1.5px solid #0284c7;
+  background: #fff;
+  color: #0284c7;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.sim-btn:hover {
+  background: #0284c7;
+  color: #fff;
+}
+.sim-btn.speed {
+  border-color: #7c3aed;
+  color: #7c3aed;
+}
+.sim-btn.speed:hover {
+  background: #7c3aed;
+  color: #fff;
 }
 .ws-auth {
   justify-content: center;
@@ -446,3 +576,277 @@
     padding: 24px;
   }
 }
+
+/* Photo upload & complaint photo styling */
+.ws-photo-upload-group {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ws-photo-label {
+  font-weight: 500;
+  color: #1e293b;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ws-photo-label small {
+  font-weight: 400;
+  color: #64748b;
+  font-size: 13px;
+}
+.ws-photo-picker-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #f8fafc;
+  border: 2px dashed #cbd5e1;
+  color: #475569;
+  border-radius: 8px;
+  padding: 16px 20px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+.ws-photo-picker-button:hover {
+  background: #f1f5f9;
+  border-color: #0284c7;
+  color: #0284c7;
+}
+.ws-photo-preview-box {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+.ws-photo-preview-thumb {
+  width: 90px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+}
+.ws-photo-preview-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.ws-photo-preview-details strong {
+  font-size: 14px;
+  color: #0f172a;
+  word-break: break-all;
+}
+.ws-photo-preview-details small {
+  color: #64748b;
+  font-size: 12px;
+}
+.ws-photo-preview-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.ws-photo-action-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #334155;
+}
+.ws-photo-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #b91c1c;
+}
+.ws-photo-remove-btn:hover {
+  background: #fecaca;
+}
+
+/* Photo view on Complaint Detail */
+.ws-complaint-photo-container {
+  margin: 18px 0;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+.ws-complaint-photo-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ws-photo-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #1e293b;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.ws-photo-view-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+.ws-complaint-photo-frame {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 600px;
+  max-height: 450px;
+  cursor: pointer;
+  background: #0f172a;
+}
+.ws-complaint-photo-image {
+  width: 100%;
+  height: 100%;
+  max-height: 450px;
+  object-fit: contain;
+  display: block;
+  transition: transform 0.2s ease;
+}
+.ws-complaint-photo-frame:hover .ws-complaint-photo-image {
+  transform: scale(1.02);
+}
+.ws-photo-overlay-hint {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: rgba(15, 23, 42, 0.75);
+  color: #ffffff;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.ws-complaint-no-photo-badge {
+  margin: 12px 0;
+  padding: 8px 14px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+/* Lightbox Modal */
+.ws-photo-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+.ws-photo-modal-content {
+  background: #ffffff;
+  border-radius: 12px;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+}
+.ws-photo-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 15px;
+  color: #0f172a;
+}
+.ws-photo-modal-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+.ws-photo-modal-close:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+.ws-photo-modal-body {
+  padding: 16px;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8fafc;
+}
+.ws-photo-modal-body img {
+  max-width: 100%;
+  max-height: 75vh;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+/* Photo tag on complaint list item */
+.ws-photo-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 12px;
+  vertical-align: middle;
+}
+
+@keyframes ws-spin-anim {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ws-spin {
+  animation: ws-spin-anim 0.75s linear infinite;
+  transform-origin: center center;
+}
+

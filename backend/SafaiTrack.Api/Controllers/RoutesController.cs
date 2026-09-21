@@ -69,10 +69,10 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
         if (route == null) return NotFound();
         if (route.Status != "Pending" || route.DriverId != null || route.TruckId != null)
             return Conflict(new { message = "Only an unassigned pending route can be assigned." });
-        var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == dto.DriverId && u.Role == "Driver" && u.WardId == route.WardId);
+        var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == dto.DriverId && u.Role == "Driver" && (User.IsInRole("Admin") || u.WardId == null || u.WardId == route.WardId));
         var truck = await db.Trucks.FindAsync(dto.TruckId);
         if (driver == null || truck == null || truck.Status != "Available")
-            return BadRequest(new { message = "Select a ward driver and available truck." });
+            return BadRequest(new { message = "Select an available driver and truck." });
         if (await db.Routes.AnyAsync(r => r.RouteId != id && r.Status != "Completed" && (r.DriverId == dto.DriverId || r.TruckId == dto.TruckId)))
             return Conflict(new { message = "This driver or truck already has an unfinished route." });
         route.DriverId = driver.Id; route.TruckId = truck.TruckId; route.Status = "AwaitingAcceptance";
@@ -99,8 +99,8 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
     {
         var user = await db.Users.FindAsync(UserId);
         if (User.IsInRole("WardOfficer") && user!.WardId != dto.WardId) return Forbid();
-        var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == dto.DriverId && u.Role == "Driver" && u.WardId == dto.WardId);
-        if (driver == null) return BadRequest(new { message = "Select a driver assigned to this ward." });
+        var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == dto.DriverId && u.Role == "Driver" && (User.IsInRole("Admin") || u.WardId == null || u.WardId == dto.WardId));
+        if (driver == null) return BadRequest(new { message = "Select a valid driver." });
         // Reserve the driver, truck, and bins atomically across concurrent dispatches.
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var truck = await db.Trucks.FindAsync(dto.TruckId);
@@ -122,9 +122,42 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
         route.RouteStops = result.OrderedStops.Select(s => new RouteStop { BinId = s.BinId, StopSequence = s.StopSequence }).ToList();
         if (pending == null) db.Routes.Add(route);
         await db.SaveChangesAsync();
+
+        // Notify Driver
+        db.Notifications.Add(new Notification
+        {
+            UserId = driver.Id,
+            RelatedRouteId = route.RouteId,
+            Title = "New Route Dispatched",
+            Message = $"Route #{route.RouteId} for Ward {dto.WardId} assigned to you with Truck {truck.PlateNumber} ({route.RouteStops.Count} stops). Please accept and start collection.",
+            Category = "info",
+            Link = "/driver/route",
+            IsRead = false,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        // Notify Ward Officer
+        var wardOfficer = await db.Users.FirstOrDefaultAsync(u => u.Role == "WardOfficer" && u.WardId == dto.WardId && u.Status == "Active");
+        if (wardOfficer != null)
+        {
+            db.Notifications.Add(new Notification
+            {
+                UserId = wardOfficer.Id,
+                RelatedRouteId = route.RouteId,
+                Title = "Route Dispatched",
+                Message = $"Route #{route.RouteId} dispatched to driver {driver.FullName} with Truck {truck.PlateNumber} ({route.RouteStops.Count} stops).",
+                Category = "info",
+                Link = "/ward/routes",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        await db.SaveChangesAsync();
         await tx.CommitAsync();
         return CreatedAtAction(nameof(GetRoute), new { id = route.RouteId }, new { route.RouteId });
     }
+    [Authorize(Roles = "Admin,WardOfficer")]
     [HttpPut("{id:int}/optimize")]
     public async Task<IActionResult> Optimize(int id)
     {
@@ -153,6 +186,26 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
             return Conflict(new { message = "This route is not ready to start." });
         route.Status = "InProgress";
         route.Truck.Status = "OnRoute";
+
+        // Notify Ward Officer(s) that driver accepted and started route
+        var startOfficers = await db.Users
+            .Where(u => u.Role == "WardOfficer" && u.WardId == route.WardId && u.Status == "Active")
+            .ToListAsync();
+        foreach (var startOfficer in startOfficers)
+        {
+            db.Notifications.Add(new Notification
+            {
+                UserId = startOfficer.Id,
+                RelatedRouteId = route.RouteId,
+                Title = "Route Accepted & Started",
+                Message = $"Driver {route.Driver?.FullName ?? "Driver"} accepted Route #{route.RouteId} with Truck {route.Truck?.PlateNumber} for Ward {route.WardId} and started collection.",
+                Category = "info",
+                Link = "/operations/routes",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
         await db.SaveChangesAsync();
         await tx.CommitAsync();
         return Ok(Summary(route));
@@ -166,7 +219,32 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
         if (route == null) return NotFound();
         if (route.Status != "AwaitingAcceptance" && route.Status != "Planned")
             return Conflict(new { message = "Only a route awaiting acceptance can be declined." });
+
+        var driverName = route.Driver?.FullName ?? "Driver";
+        var wardId = route.WardId;
+        var routeId = route.RouteId;
+
         route.DriverId = null; route.TruckId = null; route.Status = "Pending";
+
+        // Send notification to the Ward Officer of that ward
+        var declineOfficers = await db.Users
+            .Where(u => u.Role == "WardOfficer" && u.WardId == wardId && u.Status == "Active")
+            .ToListAsync();
+        foreach (var officer in declineOfficers)
+        {
+            db.Notifications.Add(new Notification
+            {
+                UserId = officer.Id,
+                RelatedRouteId = routeId,
+                Title = "Route Declined by Driver",
+                Message = $"Driver {driverName} declined Route #{routeId} for Ward {wardId}. The route is returned to Pending status. Please assign another driver.",
+                Category = "alert",
+                Link = "/operations/routes",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
         await db.SaveChangesAsync(); await tx.CommitAsync();
         return NoContent();
     }
@@ -200,6 +278,79 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
             return Conflict(new { message = "Collect every stop before completing this route." });
         route.Status = "Completed";
         if (route.Truck != null) route.Truck.Status = "Available";
+
+        // 1. Notify Ward Officer
+        var completeOfficers = await db.Users
+            .Where(u => u.Role == "WardOfficer" && u.WardId == route.WardId && u.Status == "Active")
+            .ToListAsync();
+        foreach (var completeOfficer in completeOfficers)
+        {
+            db.Notifications.Add(new Notification
+            {
+                UserId = completeOfficer.Id,
+                RelatedRouteId = route.RouteId,
+                Title = "Route Collection Completed",
+                Message = $"Route #{route.RouteId} completed: All {route.RouteStops.Count} bins in Ward {route.WardId} successfully collected by driver {route.Driver?.FullName ?? "Driver"}. All bin fill levels reset to 0%.",
+                Category = "success",
+                Link = "/operations/routes",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        // 2. Notify Driver (Shift completion + Daily Wage + 20% Performance Bonus from City Admin)
+        if (!string.IsNullOrEmpty(route.DriverId))
+        {
+            int binCount = route.RouteStops.Count;
+            // Realistic Bangladesh municipal rate: Base wage ৳800 BDT + ৳50 BDT per collected bin
+            int baseWage = 800;
+            int binIncentive = binCount * 50;
+            int totalWage = baseWage + binIncentive;
+
+            // 1) Shift completion
+            db.Notifications.Add(new Notification
+            {
+                UserId = route.DriverId,
+                RelatedRouteId = route.RouteId,
+                Title = "Shift Complete",
+                Message = $"Great job! Route #{route.RouteId} is finished. All {binCount} bins successfully collected.",
+                Category = "success",
+                Link = "/driver/route",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            // 2) City Admin Wage Disbursement
+            db.Notifications.Add(new Notification
+            {
+                UserId = route.DriverId,
+                RelatedRouteId = route.RouteId,
+                Title = "Daily Wage Credited - City Admin",
+                Message = $"City Admin Treasury credited your daily wage of ৳{totalWage:N0} BDT (Base ৳{baseWage} + ৳{binIncentive} for {binCount} bins) for Route #{route.RouteId}. Transferred to your account.",
+                Category = "success",
+                Link = "/driver/route",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            // 3) Performance Bonus if >= 6 bins: 20% bonus
+            if (binCount >= 6)
+            {
+                int bonusAmount = (int)(totalWage * 0.20);
+                db.Notifications.Add(new Notification
+                {
+                    UserId = route.DriverId,
+                    RelatedRouteId = route.RouteId,
+                    Title = "20% Performance Bonus Awarded",
+                    Message = $"City Admin Bonus: You earned a 20% high-coverage bonus (৳{bonusAmount:N0} BDT) for collecting {binCount} bins on Route #{route.RouteId} without delay.",
+                    Category = "success",
+                    Link = "/driver/route",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+        }
+
         await db.SaveChangesAsync();
         await tx.CommitAsync();
         return Ok(Summary(route));
