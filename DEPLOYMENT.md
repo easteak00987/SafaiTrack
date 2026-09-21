@@ -1,8 +1,20 @@
 # Deploying SafaiTrack
 
-The project now runs on **PostgreSQL** and deploys to **Render** on free tiers
-throughout. Three pieces have to run: the ASP.NET Core API, a Postgres database, and
-the built React client.
+## 🏆 Live Demo Links (For Presentation & Evaluation)
+
+> [!IMPORTANT]
+> Access the live deployed application and backend endpoints here:
+
+| Component | Live URL | Purpose |
+| :--- | :--- | :--- |
+| 🌐 **Frontend App** | [https://safaitrack-client.onrender.com](https://safaitrack-client.onrender.com) | Interactive Citizen, Driver, Admin & Inspector Workspaces |
+| ⚙️ **Backend API** | [https://safaitrack-api.onrender.com](https://safaitrack-api.onrender.com) | ASP.NET Core 10 Web API Service |
+| 📄 **Swagger Specs** | [https://safaitrack-api.onrender.com/swagger](https://safaitrack-api.onrender.com/swagger) | Interactive OpenAPI Endpoint Documentation |
+| 🏥 **Health Check** | [https://safaitrack-api.onrender.com/health](https://safaitrack-api.onrender.com/health) | Live System Health Monitor (`{"status":"healthy"}`) |
+
+---
+
+The project runs on **PostgreSQL** (Neon) and deploys to **Render** on free tiers throughout. Three pieces run: the ASP.NET Core API, a Postgres database, and the built React client.
 
 ## Where each piece goes
 
