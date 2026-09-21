@@ -1,173 +1,69 @@
-# Deploying SafaiTrack
+# 🚀 SafaiTrack Deployment Guide
 
-## 🏆 Live Demo Links (For Presentation & Evaluation)
-
-> [!IMPORTANT]
-> Access the live deployed application and backend endpoints here:
-
-| Component | Live URL | Purpose |
-| :--- | :--- | :--- |
-| 🌐 **Frontend App** | [https://safaitrack-client.onrender.com](https://safaitrack-client.onrender.com) | Interactive Citizen, Driver, Admin & Inspector Workspaces |
-| ⚙️ **Backend API** | [https://safaitrack-api.onrender.com](https://safaitrack-api.onrender.com) | ASP.NET Core 10 Web API Service |
-| 📄 **Swagger Specs** | [https://safaitrack-api.onrender.com/swagger](https://safaitrack-api.onrender.com/swagger) | Interactive OpenAPI Endpoint Documentation |
-| 🏥 **Health Check** | [https://safaitrack-api.onrender.com/health](https://safaitrack-api.onrender.com/health) | Live System Health Monitor (`{"status":"healthy"}`) |
+Simple, 100% free deployment setup using **Render** and **Neon PostgreSQL**.
 
 ---
 
-The project runs on **PostgreSQL** (Neon) and deploys to **Render** on free tiers throughout. Three pieces run: the ASP.NET Core API, a Postgres database, and the built React client.
+## 🏆 Live Links (Presentation & Evaluation)
 
-## Where each piece goes
+| Component | Live Link | Description |
+| :--- | :--- | :--- |
+| 🌐 **Frontend Web App** | [https://safaitrack-client.onrender.com](https://safaitrack-client.onrender.com) | React + TypeScript web app for Citizens, Drivers, & Admins |
+| ⚙️ **Backend API** | [https://safaitrack-api.onrender.com](https://safaitrack-api.onrender.com) | ASP.NET Core 10 Web API service |
+| 📄 **Swagger Specs** | [https://safaitrack-api.onrender.com/swagger](https://safaitrack-api.onrender.com/swagger) | Interactive API endpoint documentation |
+| 🏥 **Health Check** | [https://safaitrack-api.onrender.com/health](https://safaitrack-api.onrender.com/health) | System health monitor (`{"status":"healthy"}`) |
 
-| Piece | Service | Cost | Note |
-|---|---|---|---|
-| Database | **Neon** free tier | Free, no expiry | 0.5 GB, suspends after 5 min idle |
-| API | Render web service (Docker) | Free | Spins down after 15 min idle |
-| Client | Render static site | Free | No spin-down |
-| CI + keep-warm | GitHub Actions | Free on public repos | |
+---
 
-### Why Neon and not Render's own Postgres
+## 📌 How the Architecture Works
 
-**Render's free Postgres is deleted 30 days after creation** — if not upgraded within
-14 days of expiry, it is destroyed. That would take the project down part-way through
-the term. Neon's free tier has usage limits rather than a time limit, so it survives.
-This is why `render.yaml` deliberately does not declare a database.
+1. **Database**: [Neon](https://neon.tech) — Free, permanent PostgreSQL database (no 30-day deletion).
+2. **Backend**: [Render Web Service](https://render.com) — Runs ASP.NET Core API inside Docker container.
+3. **Frontend**: [Render Static Site](https://render.com) — Hosts compiled React files globally.
 
-### Why there is a Dockerfile again
+---
 
-Render has no native .NET runtime, so a container is the only way to run ASP.NET Core
-there. **Render builds the image itself in the cloud** — Docker does not need to be
-installed or running on your machine.
+## 🛠️ Quick 3-Step Deployment Guide
 
-## Steps
+### 1️⃣ Step 1: Create Database on Neon
+1. Sign up at **[neon.tech](https://neon.tech)** and click **Create Project**.
+2. Click the green **Connect** button.
+3. Copy your PostgreSQL connection URL:
+   ```text
+   postgresql://user:password@ep-something.aws.neon.tech/neondb?sslmode=require
+   ```
 
-### 1. Create the database
+### 2️⃣ Step 2: Deploy on Render via Blueprint
+1. Log in to **[dashboard.render.com](https://dashboard.render.com)**.
+2. Click **New +** → **Blueprint**.
+3. Select your GitHub repository (`Safai_Track`) and branch `main`.
 
-Sign up at <https://neon.com>, create a project, and copy the connection string. It
-looks like:
+### 3️⃣ Step 3: Enter Environment Variables
+When Render asks for environment variables, fill in:
 
-```
-postgresql://user:password@ep-something.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
-```
+* **For `safaitrack-api`**:
+  - `DATABASE_URL`: *(Your Neon string from Step 1)*
+  - `Cors__AllowedOrigins__0`: `https://safaitrack-client.onrender.com`
+  - `SslCommerz__ApiBaseUrl`: `https://safaitrack-api.onrender.com`
+  - `SslCommerz__ClientBaseUrl`: `https://safaitrack-client.onrender.com`
 
-The API accepts that URI form directly and converts it for Npgsql.
+* **For `safaitrack-client`**:
+  - `VITE_API_BASE_URL`: `https://safaitrack-api.onrender.com`
 
-### 2. Create the services
+---
 
-In Render: **New → Blueprint**, point it at this repository. It reads
-[`render.yaml`](render.yaml) and creates both services.
+## 💻 Running Locally
 
-### 3. Fill in the environment variables
-
-Render will prompt for the values marked `sync: false`. On the **API** service:
-
-| Variable | Value |
-|---|---|
-| `DATABASE_URL` | The Neon connection string from step 1 |
-| `Cors__AllowedOrigins__0` | The client's URL, e.g. `https://safaitrack-client.onrender.com` |
-| `SslCommerz__ApiBaseUrl` | The API's own URL |
-| `SslCommerz__ClientBaseUrl` | The client's URL |
-
-On the **client** service:
-
-| Variable | Value |
-|---|---|
-| `VITE_API_BASE_URL` | The API's URL |
-
-The URLs are only known once Render has created the services, so the first deploy is
-a two-pass affair: deploy, read the assigned URLs, set the variables, redeploy. The
-client in particular **must** be redeployed after setting `VITE_API_BASE_URL`, because
-Vite inlines that value at build time rather than reading it at runtime.
-
-`Jwt__Key` is generated by Render automatically and persists across deploys.
-
-### 4. Enable the keep-warm ping
-
-Set the repository variable `API_BASE_URL` to the API's URL under **GitHub → Settings
-→ Secrets and variables → Actions**. [`keep-warm.yml`](.github/workflows/keep-warm.yml)
-then pings `/health` every ~10 minutes, which keeps the Render service from spinning
-down and the Neon compute from suspending.
-
-The database migrates itself on first start, so there is no separate schema step.
-
-## What free costs you
-
-- **Render spins the API down after 15 minutes idle**, with roughly a one-minute cold
-  start. The keep-warm ping mostly prevents this.
-- **Neon suspends compute after 5 minutes idle** and takes a moment to resume.
-- **750 instance-hours/month** across the workspace — one always-on free service uses
-  about 730, so this is the practical limit of one service.
-- The three timer-driven background services — bin fill, auto-routing, invoice
-  generation — **do not run while the service is spun down**. The keep-warm workflow
-  exists specifically to stop that happening.
-
-### The one thing keep-warm cannot fix
-
-SSLCommerz calls `/api/payments/ipn` directly and will not wait through a cold start.
-If the service happens to be asleep, that notification is lost. The browser redirect
-still settles the payment when the citizen returns, and settlement is idempotent, so a
-real person paying is unaffected — but do not rely on IPN alone on a free tier.
-
-## Configuration
-
-Environment variables, using ASP.NET's `__` section separator.
-
-| Variable | Required | Purpose |
-|---|---|---|
-| `DATABASE_URL` | Yes* | Postgres URI; converted for Npgsql automatically |
-| `ConnectionStrings__DefaultConnection` | Yes* | Key/value form; takes precedence if set |
-| `Jwt__Key` | Yes | Token signing key, 32+ characters |
-| `Cors__AllowedOrigins__0` | Yes | The client's origin, exactly |
-| `SslCommerz__ApiBaseUrl` | Yes | Public HTTPS URL of the API |
-| `SslCommerz__ClientBaseUrl` | Yes | Public HTTPS URL of the client |
-| `SslCommerz__StoreId` / `__StorePassword` | No | Omit to use the simulated gateway |
-| `Billing__MonthlyFee` | No | Defaults to 150 BDT |
-| `Database__AutoMigrate` | No | Defaults to true |
-| `PORT` | No | Set by Render; overrides `ASPNETCORE_URLS` |
-
-\* One of the two. `ConnectionStrings__DefaultConnection` wins when both are present.
-
-**`Jwt__Key` has no production fallback.** The API refuses to start without it outside
-Development, deliberately — the development default is committed to a public
-repository, and anyone holding it could mint a token for any role.
-
-## Running locally
-
-You need a local PostgreSQL 14+ instance.
-
+### Backend:
 ```bash
-createdb safaitrack
-
 cd backend/SafaiTrack.Api
-dotnet user-secrets init
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=safaitrack;Username=postgres;Password=postgres"
-dotnet user-secrets set "Jwt:Key" "<at least 32 random characters>"
 dotnet run
 ```
+*API runs at `http://localhost:5281` with Swagger at `/swagger`.*
 
+### Frontend:
 ```bash
-cd frontend/safai-track-client && pnpm run dev
+cd frontend/safai-track-client
+npm run dev
 ```
-
-The API creates and migrates the schema on first run.
-
-## After deploying
-
-1. `GET /health` returns `{"status":"healthy"}` without touching the database, so it
-   stays up during a database blip instead of triggering a restart loop.
-2. `/swagger` lists every endpoint.
-3. Register an account and sign in — that exercises the JWT key, the database
-   connection and CORS together.
-4. Check the logs for `Database schema is up to date` and which payment gateway was
-   selected.
-
-### Switching payments to the real sandbox
-
-Register at <https://developer.sslcommerz.com/>, then set `SslCommerz__StoreId` and
-`SslCommerz__StorePassword` on the API service. The real gateway takes over on restart
-and the simulated checkout page stops being served.
-
-## What is not set up
-
-- **Custom domain.** Render provides `*.onrender.com` with HTTPS.
-- **Database backups.** Neon's free tier keeps one manual snapshot.
-- **Staging environment.** Render deploys the connected branch straight to production.
+*Frontend runs at `http://localhost:3000`.*
