@@ -64,7 +64,7 @@ services:
   - type: web
     name: safaitrack-client
     runtime: static
-    buildCommand: corepack enable && cd frontend/safai-track-client && pnpm install --frozen-lockfile && pnpm run build
+    buildCommand: npm install -g pnpm && cd frontend/safai-track-client && pnpm install && pnpm run build
     staticPublishPath: ./frontend/safai-track-client/dist/public
     envVars:
       # Vite inlines this at build time, so changing it needs a redeploy of this
