@@ -61,6 +61,7 @@ public class PaymentsController : ControllerBase
             .Select(p => new PaymentResponseDto
             {
                 PaymentId = p.PaymentId,
+                ReviewStatus = p.ReviewStatus,
                 InvoiceId = p.InvoiceId,
                 InvoiceNumber = p.Invoice != null ? p.Invoice.InvoiceNumber : null,
                 TransactionRef = p.TransactionRef,
@@ -326,7 +327,8 @@ public class PaymentsController : ControllerBase
         {
             payment.Status = PaymentStatus.Failed;
             payment.FailureReason = Truncate(validation.ErrorMessage, 500);
-            payment.Invoice.Status = InvoiceStatus.Unpaid;
+            if (!await _context.Payments.AnyAsync(p => p.InvoiceId == payment.InvoiceId && p.Status == PaymentStatus.Success, cancellationToken))
+                payment.Invoice.Status = InvoiceStatus.Unpaid;
 
             await _context.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
@@ -341,6 +343,15 @@ public class PaymentsController : ControllerBase
         payment.Status = PaymentStatus.Success;
         payment.GatewayTransactionId = validation.GatewayTransactionId;
         payment.PaymentMethod = validation.PaymentMethod;
+
+        // A late callback from an older checkout must not reopen an already funded invoice.
+        if (await _context.Payments.AnyAsync(p => p.InvoiceId == payment.InvoiceId && p.PaymentId != payment.PaymentId && p.Status == PaymentStatus.Success, cancellationToken))
+        {
+            payment.ReviewStatus = "Duplicate";
+            await _context.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            return ("success", "Payment received. Another payment exists for this invoice; contact City Admin for reconciliation. Do not pay again.");
+        }
 
         var admins = await _context.Users.Where(u => u.Role == "Admin" && u.Status == "Active").Select(u => u.Id).ToListAsync(cancellationToken);
         _context.Notifications.AddRange(admins.Select(id => new Notification {

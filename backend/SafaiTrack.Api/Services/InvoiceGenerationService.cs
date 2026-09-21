@@ -51,6 +51,7 @@ public class InvoiceGenerationService(
             return 0;
         }
 
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
         var now = asOfUtc ?? DateTime.UtcNow;
         var periodStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         var periodEnd = periodStart.AddMonths(1).AddTicks(-1);
@@ -88,6 +89,7 @@ public class InvoiceGenerationService(
         }).ToList();
         db.BillingDrafts.AddRange(drafts);
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         logger.LogInformation("Prepared {Count} billing proposals for {Period:yyyy-MM}", drafts.Count, periodStart);
         return drafts.Count;
     }

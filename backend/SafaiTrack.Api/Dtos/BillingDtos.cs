@@ -23,6 +23,7 @@ public class InvoiceResponseDto
 
 public class PaymentResponseDto
 {
+    public string? ReviewStatus { get; set; }
     public int PaymentId { get; set; }
     public int InvoiceId { get; set; }
     public string? InvoiceNumber { get; set; }

@@ -244,7 +244,7 @@ export default function AuthPage({ register = false, cityAdmin = false }: { regi
             <p className="auth-subtitle">
               {register
                 ? "Choose how you’ll help make civic handoffs visible."
-                : "Sign in to pick up the next useful signal in your ward."}
+                : cityAdmin ? "Sign in to manage city services, approvals and payments." : "Sign in to pick up the next useful signal in your ward."}
             </p>
           </div>
 
@@ -310,7 +310,7 @@ export default function AuthPage({ register = false, cityAdmin = false }: { regi
                     onChange={e => setEmail(e.target.value)}
                     required
                     autoComplete={register ? "email" : "username"}
-                    placeholder={register ? "you@example.com" : "e.g. Karim Driver or driver@safaitrack.local"}
+                    placeholder={register ? "you@example.com" : cityAdmin ? "Your City Admin email or name" : "e.g. Karim Driver or driver@safaitrack.local"}
                   />
                 </div>
               </div>
@@ -555,7 +555,7 @@ export default function AuthPage({ register = false, cityAdmin = false }: { regi
                   ? "Authenticating..."
                   : register
                     ? "Create access layer"
-                    : "Open access layer"}
+                    : cityAdmin ? "Sign in as City Admin" : "Open access layer"}
                 <ArrowUpRight size={22} strokeWidth={2.6} />
               </motion.button>
             </div>

@@ -87,6 +87,7 @@ type Invoice = {
   paidAt: string | null;
 };
 type PaymentRecord = {
+  reviewStatus?: string | null;
   paymentId: number;
   invoiceId: number;
   invoiceNumber: string | null;
@@ -1409,6 +1410,7 @@ interface PendingUser {
 function PendingApprovals() {
   const resource = useData<PendingUser[]>("/api/auth/pending-approvals");
   const wards = useData<Ward[]>("/api/workspace/wards");
+  useEffect(() => { const timer = setInterval(resource.reload, 15000); return () => clearInterval(timer); }, [resource.reload]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1596,6 +1598,7 @@ function PaymentOutcome() {
 function CitizenBilling() {
   const invoices = useData<Invoice[]>("/api/invoices");
   const payments = useData<PaymentRecord[]>("/api/payments");
+  useEffect(() => { const timer = setInterval(() => { void invoices.reload(); void payments.reload(); }, 15000); return () => clearInterval(timer); }, [invoices.reload, payments.reload]);
   const [paying, setPaying] = useState<number | null>(null);
   const [error, setError] = useState("");
   const rows = invoices.data || [];
@@ -1726,7 +1729,7 @@ function CitizenBilling() {
               <strong className="ws-amount">
                 {money(payment.amount, payment.currency)}
               </strong>
-              <Status value={payment.status} />
+              <Status value={payment.reviewStatus === "Pending" ? "AwaitingApproval" : payment.reviewStatus === "Rejected" ? "ReviewHold" : payment.reviewStatus === "Approved" ? "Confirmed" : payment.status} />
               <small className="ws-when">
                 {when(payment.completedAt || payment.initiatedAt)}
               </small>
