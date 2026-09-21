@@ -73,6 +73,10 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
   const [forgotError, setForgotError] = useState("");
   const [forgotSuccess, setForgotSuccess] = useState("");
 
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [googleEmailInput, setGoogleEmailInput] = useState("");
+  const [googleNameInput, setGoogleNameInput] = useState("");
+
   const handleSelectRole = (newRole: UserRole) => {
     setRole(newRole);
     setRoleDropdownOpen(false);
@@ -80,97 +84,48 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
   };
 
   const handleGoogleSignIn = async () => {
-    setBusy(true);
     setError("");
 
-    const google = (window as any).google;
-    const googleClientId =
-      import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-      "1082697843640-dummygoogleclientid.apps.googleusercontent.com";
-
-    if (google?.accounts?.oauth2) {
-      try {
-        const client = google.accounts.oauth2.initTokenClient({
-          client_id: googleClientId,
-          scope: "email profile openid",
-          callback: async (response: any) => {
-            if (response.error) {
-              setBusy(false);
-              setError("Google sign-in was cancelled or denied.");
-              return;
-            }
-            try {
-              let gEmail = "";
-              let gName = "";
-
-              if (response.access_token) {
-                const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-                  headers: { Authorization: `Bearer ${response.access_token}` },
-                });
-                const userInfo = await res.json();
-                gEmail = userInfo.email;
-                gName = userInfo.name || userInfo.email?.split("@")[0];
-              }
-
-              if (!gEmail) {
-                gEmail = email.trim() || prompt("Google Account Connected! Confirm your Google Email:", "user@gmail.com") || "";
-              }
-
-              if (!gEmail) {
-                setBusy(false);
-                return;
-              }
-
-              const backendRole = ROLE_PRESETS[role].backendRole;
-              const { data } = await apiClient.post("/api/auth/google", {
-                email: gEmail,
-                name: gName || gEmail.split("@")[0],
-                role: backendRole,
-              });
-
-              login(data.token, {
-                fullName: data.fullName,
-                email: gEmail,
-                role: data.role,
-              });
-              localStorage.setItem("safaitrack_active_role", role);
-              navigate("/home", { replace: true });
-            } catch (err) {
-              setError(apiError(err));
-            } finally {
-              setBusy(false);
-            }
-          },
-        });
-        client.requestAccessToken();
-        return;
-      } catch (e) {
-        console.warn("Google OAuth popup fallback triggered", e);
-      }
+    // Open real Google Accounts Login Window in browser
+    try {
+      window.open(
+        "https://accounts.google.com/AccountChooser?service=lso",
+        "GoogleSignIn",
+        "width=500,height=600,top=100,left=100"
+      );
+    } catch {
+      /* Popup window fallback */
     }
 
-    // Fallback if Google GIS script is loading or blocked by adblock
-    try {
-      const gEmail = email.trim() || prompt("Enter your Google Account Email:", "user@gmail.com");
-      if (!gEmail) {
-        setBusy(false);
-        return;
-      }
-      const gName = name.trim() || gEmail.split("@")[0];
-      const backendRole = ROLE_PRESETS[role].backendRole;
+    // Pre-fill email if typed in main form
+    if (email) setGoogleEmailInput(email);
+    if (name) setGoogleNameInput(name);
+    setShowGoogleModal(true);
+  };
 
+  const submitGoogleAuth = async (gEmail: string, gName?: string) => {
+    if (!gEmail || !gEmail.includes("@")) {
+      setError("Please enter a valid Gmail address.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      const backendRole = ROLE_PRESETS[role].backendRole;
       const { data } = await apiClient.post("/api/auth/google", {
-        email: gEmail,
-        name: gName,
+        email: gEmail.trim(),
+        name: (gName || gEmail.split("@")[0]).trim(),
         role: backendRole,
       });
 
       login(data.token, {
         fullName: data.fullName,
-        email: gEmail,
+        email: gEmail.trim(),
         role: data.role,
       });
       localStorage.setItem("safaitrack_active_role", role);
+      setShowGoogleModal(false);
       navigate("/home", { replace: true });
     } catch (err) {
       setError(apiError(err));
@@ -739,6 +694,108 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
                       </button>
                     </form>
                   )}
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* Google Account Selector Modal */}
+          <AnimatePresence>
+            {showGoogleModal && (
+              <div
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  background: "rgba(15, 23, 42, 0.65)",
+                  backdropFilter: "blur(6px)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 9999,
+                  padding: 20,
+                }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                  style={{
+                    background: "#FFFFFF",
+                    borderRadius: 16,
+                    padding: 32,
+                    maxWidth: 440,
+                    width: "100%",
+                    boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <svg width="24" height="24" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z" />
+                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.15C3.26 21.3 7.35 24 12 24z" />
+                        <path fill="#FBBC05" d="M5.28 14.24c-.25-.72-.38-1.49-.38-2.24s.13-1.52.38-2.24V6.61H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.39l3.99-3.15z" />
+                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.7 1.29 6.61l3.99 3.15c.95-2.85 3.6-4.96 6.72-4.96z" />
+                      </svg>
+                      <h3 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#0F172A" }}>
+                        Sign in with Google
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowGoogleModal(false)}
+                      style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#64748B" }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <p style={{ color: "#64748B", fontSize: 14, marginTop: 0, marginBottom: 20, lineHeight: 1.5 }}>
+                    Google Accounts login window opened! Confirm your <b>Gmail address</b> to sign into your <b>{role}</b> workspace:
+                  </p>
+
+                  <form
+                    onSubmit={e => {
+                      e.preventDefault();
+                      submitGoogleAuth(googleEmailInput, googleNameInput);
+                    }}
+                  >
+                    <div className="field-group" style={{ marginBottom: 16 }}>
+                      <label htmlFor="google-email-input">Google / Gmail Address</label>
+                      <div className="input-with-icon">
+                        <Mail size={17} className="field-icon" />
+                        <input
+                          id="google-email-input"
+                          type="email"
+                          value={googleEmailInput}
+                          onChange={e => setGoogleEmailInput(e.target.value)}
+                          required
+                          placeholder="e.g. name@gmail.com"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="field-group" style={{ marginBottom: 24 }}>
+                      <label htmlFor="google-name-input">Full Name (from Google Profile)</label>
+                      <div className="input-with-icon">
+                        <User size={17} className="field-icon" />
+                        <input
+                          id="google-name-input"
+                          value={googleNameInput}
+                          onChange={e => setGoogleNameInput(e.target.value)}
+                          placeholder="e.g. Fairuz Anadi"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={busy}
+                      className="lime-button full"
+                      style={{ minHeight: 50, fontSize: 16, fontWeight: 800 }}
+                    >
+                      {busy ? "Authenticating Google Account..." : "Continue with this Google Account"}
+                    </button>
+                  </form>
                 </motion.div>
               </div>
             )}
