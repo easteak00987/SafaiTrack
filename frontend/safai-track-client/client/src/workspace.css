@@ -86,12 +86,34 @@
 .ws-top {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 16px;
-  padding: 21px 32px;
+  padding: 18px 32px;
   border-bottom: 1px solid #dbe2e3;
   background: #fff;
-  font-size: 13px;
+  font-size: 14px;
 }
+.ws-top > span:first-child {
+  font-size: 16px;
+  font-weight: 750;
+  color: #0f3638;
+  letter-spacing: -0.2px;
+  text-transform: capitalize;
+}
+.ws-top > span:nth-child(2) {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0d6854;
+  background: #e6f6ee;
+  border: 1px solid #bcead1;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(13, 104, 84, 0.08);
+}
+
 .ws-content {
   max-width: 1350px;
   margin: 0 auto;

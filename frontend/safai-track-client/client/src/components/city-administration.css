@@ -77,13 +77,22 @@
 .ca-wage {
   border: 1px solid #d6e2e3;
   border-top: 3px solid #4b9391;
-  border-radius: 10px;
+  border-radius: 12px;
   background: white;
   padding: 24px;
   box-shadow: 0 6px 22px #173d4010;
   min-width: 0;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease;
+  cursor: pointer;
+}
+.ca-person:hover,
+.ca-wage:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 16px 36px rgba(16, 59, 60, 0.16);
+  border-color: #5ea89b;
 }
 .ca-person-top {
+
   display: flex;
   align-items: center;
   gap: 12px;
@@ -173,13 +182,16 @@
 .ca-metrics strong,
 .ca-summary strong {
   display: block;
-  font-size: 25px;
-  font-weight: 650;
+  font-size: 32px;
+  font-weight: 750;
+  color: #103b3c;
+  letter-spacing: -0.5px;
 }
 .ca small {
   display: block;
-  color: #6b838b;
-  font-size: 11px;
+  color: #557279;
+  font-size: 12px;
+  font-weight: 500;
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
@@ -190,11 +202,38 @@
 }
 .ca-summary > div {
   background: white;
-  padding: 20px;
+  padding: 22px 24px;
   border: 1px solid #d5e1e3;
-  border-top: 3px solid #a6c955;
-  border-radius: 8px;
+  border-top: 4px solid #a6c955;
+  border-radius: 12px;
+  box-shadow: 0 6px 20px #173d400c;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease;
+  cursor: pointer;
 }
+.ca-summary > div:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 16px 36px rgba(16, 59, 60, 0.16);
+  border-color: #7bb59c;
+}
+.ca-summary > div:nth-child(1) {
+  border-top-color: #0284c7;
+}
+.ca-summary > div:nth-child(1) strong {
+  color: #0369a1;
+}
+.ca-summary > div:nth-child(2) {
+  border-top-color: #16a34a;
+}
+.ca-summary > div:nth-child(2) strong {
+  color: #15803d;
+}
+.ca-summary > div:nth-child(3) {
+  border-top-color: #d97706;
+}
+.ca-summary > div:nth-child(3) strong {
+  color: #b45309;
+}
+
 .ca-ledger-line {
   display: flex;
   gap: 12px;

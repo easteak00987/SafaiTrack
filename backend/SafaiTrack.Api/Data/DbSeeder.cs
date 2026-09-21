@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SafaiTrack.Api.Models;
+using Route = SafaiTrack.Api.Models.Route;
 
 namespace SafaiTrack.Api.Data;
+
 
 public static class DbSeeder
 {
@@ -369,5 +371,225 @@ public static class DbSeeder
                 await userManager.UpdateAsync(user);
             }
         }
+
+        // 8. New Pending Approval Accounts for Admin Approvals Testing
+        var pendingAccounts = new[]
+        {
+            new { Email = "mahir.citizen@safaitrack.local", FullName = "Mahir Faysal", Gender = "Male", Phone = "+8801912345001", Role = "Citizen", Ward = "Dhanmondi" },
+            new { Email = "rafiq.driver@safaitrack.local", FullName = "Rafiqul Islam Babul", Gender = "Male", Phone = "+8801712345002", Role = "Driver", Ward = "" },
+            new { Email = "nusrat.officer@safaitrack.local", FullName = "Nusrat Jahan Chowdhury", Gender = "Female", Phone = "+8801812345003", Role = "WardOfficer", Ward = "Dhanmondi" }
+        };
+
+        foreach (var p in pendingAccounts)
+        {
+            var user = await userManager.FindByEmailAsync(p.Email);
+            if (user == null)
+            {
+                var assignedWard = !string.IsNullOrEmpty(p.Ward) ? FindWardByKeyword(p.Ward) : null;
+                user = new ApplicationUser
+                {
+                    UserName = p.Email,
+                    Email = p.Email,
+                    FullName = p.FullName,
+                    Gender = p.Gender,
+                    PhoneNumber = p.Phone,
+                    Role = p.Role,
+                    Status = "PendingApproval",
+                    WardId = p.Role == "Citizen" ? assignedWard?.WardId : null,
+                    RequestedWardId = p.Role == "WardOfficer" ? assignedWard?.WardId : null,
+                    EmailConfirmed = false
+                };
+                await userManager.CreateAsync(user, "Pass1234!");
+                await userManager.AddToRoleAsync(user, p.Role);
+            }
+        }
+
+        // 9. Operational Activity: Complaints & Resolutions for ALL Ward Officers
+        var activeOfficers = await context.Users.Where(u => u.Role == "WardOfficer" && u.Status == "Active").ToListAsync();
+        var allBins = await context.Bins.ToListAsync();
+        var citizensList = await context.Users.Where(u => u.Role == "Citizen" && u.Status == "Active").ToListAsync();
+        var primaryCitizen = citizensList.FirstOrDefault();
+
+        if (primaryCitizen != null && allBins.Any())
+        {
+            var now = DateTime.UtcNow;
+            foreach (var off in activeOfficers)
+            {
+                var wardBins = allBins.Where(b => b.WardId == off.WardId).ToList();
+                if (!wardBins.Any()) continue;
+
+                var hasComplaints = await context.Complaints.AnyAsync(c => c.Bin!.WardId == off.WardId);
+                if (!hasComplaints)
+                {
+                    var b1 = wardBins[0];
+                    var b2 = wardBins.Count > 1 ? wardBins[1] : wardBins[0];
+
+                    var comp1 = new Complaint
+                    {
+                        BinId = b1.BinId,
+                        CitizenId = primaryCitizen.Id,
+                        Category = "Overflowing",
+                        Description = "Excess waste accumulating after peak morning hours; requires clearing.",
+                        Status = "Resolved",
+                        CreatedAt = now.AddHours(-10),
+                        ResolvedAt = now.AddHours(-2)
+                    };
+                    context.Complaints.Add(comp1);
+
+                    var comp2 = new Complaint
+                    {
+                        BinId = b2.BinId,
+                        CitizenId = primaryCitizen.Id,
+                        Category = "Odor / Hazard",
+                        Description = "Unpleasant odor near neighborhood path; sanitization requested.",
+                        Status = "InProgress",
+                        CreatedAt = now.AddHours(-4)
+                    };
+                    context.Complaints.Add(comp2);
+                    await context.SaveChangesAsync();
+
+                    context.ComplaintUpdates.Add(new ComplaintUpdate
+                    {
+                        ComplaintId = comp1.ComplaintId,
+                        AuthorId = off.Id,
+                        AuthorName = off.FullName,
+                        Status = "Resolved",
+                        Message = "Collection completed and bin surroundings disinfected.",
+                        CreatedAt = now.AddHours(-2)
+                    });
+
+                    context.ComplaintUpdates.Add(new ComplaintUpdate
+                    {
+                        ComplaintId = comp2.ComplaintId,
+                        AuthorId = off.Id,
+                        AuthorName = off.FullName,
+                        Status = "InProgress",
+                        Message = "Inspection ongoing; crew dispatched.",
+                        CreatedAt = now.AddHours(-3)
+                    });
+                }
+            }
+            await context.SaveChangesAsync();
+        }
+
+        // 10. Operational Activity: Routes, RouteActivities & Driver Daily Quotas for ALL Drivers
+        var activeDrivers = await context.Users.Where(u => u.Role == "Driver" && u.Status == "Active").ToListAsync();
+        var availableTrucks = await context.Trucks.ToListAsync();
+
+        if (activeDrivers.Any() && availableTrucks.Any())
+        {
+            var now = DateTime.UtcNow;
+            for (int i = 0; i < activeDrivers.Count; i++)
+            {
+                var driver = activeDrivers[i];
+                var truck = availableTrucks[i % availableTrucks.Count];
+                var assignedOfficer = activeOfficers[i % activeOfficers.Count];
+                var wardId = assignedOfficer.WardId ?? 1;
+                var wardBins = allBins.Where(b => b.WardId == wardId).Take(8).ToList();
+
+                var hasCompleted = await context.Routes.AnyAsync(r => r.DriverId == driver.Id && r.Status == "Completed");
+                if (!hasCompleted && wardBins.Count >= 2)
+                {
+                    var completedRoute = new Route
+                    {
+                        WardId = wardId,
+                        DriverId = driver.Id,
+                        TruckId = truck.TruckId,
+                        Status = "Completed",
+                        Algorithm = "dijkstra",
+                        TotalDistanceKm = 4.8,
+                        NaiveDistanceKm = 7.2,
+                        CreatedAt = now.AddHours(-6),
+                        CompletedAt = now.AddHours(-3),
+                        RouteStops = wardBins.Select((b, seq) => new RouteStop
+                        {
+                            BinId = b.BinId,
+                            StopSequence = seq + 1,
+                            CollectedAt = now.AddHours(-3)
+                        }).ToList()
+                    };
+                    context.Routes.Add(completedRoute);
+                    await context.SaveChangesAsync();
+
+                    context.RouteActivities.Add(new RouteActivity
+                    {
+                        RouteId = completedRoute.RouteId,
+                        ActorId = assignedOfficer.Id,
+                        Action = "Assigned",
+                        CreatedAt = now.AddHours(-6)
+                    });
+                    context.RouteActivities.Add(new RouteActivity
+                    {
+                        RouteId = completedRoute.RouteId,
+                        ActorId = assignedOfficer.Id,
+                        Action = "Optimized",
+                        CreatedAt = now.AddHours(-6)
+                    });
+
+                    var binsCount = wardBins.Count;
+                    var baseAmt = 800m;
+                    var perBin = 50m;
+                    var subtotal = baseAmt + (binsCount * perBin);
+                    var bonus = binsCount >= 6 ? decimal.Round(subtotal * 0.20m, 2) : 0m;
+                    var total = subtotal + bonus;
+
+                    string wageStatus = (i % 3 == 0) ? "Released" : (i % 3 == 1) ? "Collected" : "Accruing";
+
+                    var wage = new DriverWage
+                    {
+                        DriverId = driver.Id,
+                        PeriodStart = now.AddHours(-26),
+                        PeriodEnd = now.AddHours(-2),
+                        RoutesCompleted = 1,
+                        BinsCollected = binsCount,
+                        RequiredRoutes = 1,
+                        RequiredBins = 6,
+                        BaseAmount = baseAmt,
+                        PerBinAmount = perBin,
+                        BonusRate = 0.20m,
+                        BonusAmount = bonus,
+                        Amount = total,
+                        Status = wageStatus,
+                        ReleasedAt = wageStatus != "Accruing" ? now.AddHours(-1) : null,
+                        ReleasedById = wageStatus != "Accruing" ? "admin" : null,
+                        CollectedAt = wageStatus == "Collected" ? now.AddMinutes(-30) : null,
+                        Contributions = new List<WageContribution>
+                        {
+                            new WageContribution
+                            {
+                                RouteId = completedRoute.RouteId,
+                                BinsCollected = binsCount,
+                                CompletedAt = now.AddHours(-3)
+                            }
+                        }
+                    };
+                    context.DriverWages.Add(wage);
+                }
+            }
+            await context.SaveChangesAsync();
+        }
+
+        // 11. Billing Proposals (BillingDrafts) ready to send in Admin Dashboard
+        var unbilledCitizens = await context.Users.Where(u => u.Role == "Citizen" && u.Status == "Active" && u.WardId != null).ToListAsync();
+        var nextPeriod = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(1);
+
+        foreach (var cit in unbilledCitizens)
+        {
+            var hasDraft = await context.BillingDrafts.AnyAsync(d => d.CitizenId == cit.Id && d.PeriodStart == nextPeriod);
+            if (!hasDraft)
+            {
+                context.BillingDrafts.Add(new BillingDraft
+                {
+                    CitizenId = cit.Id,
+                    WardId = cit.WardId!.Value,
+                    PeriodStart = nextPeriod,
+                    Amount = 150m,
+                    Currency = "BDT",
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+        }
+        await context.SaveChangesAsync();
     }
 }
+

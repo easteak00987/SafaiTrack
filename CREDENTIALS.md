@@ -108,9 +108,23 @@ Each ward officer is assigned to their designated municipal ward in Dhaka.
 
 ---
 
+## New Registered Accounts (Pending Admin Approval for Testing)
+
+These accounts were registered through the public registration interface (`/register`). They start in **`PendingApproval`** status and will appear in the **City Admin Approvals** dashboard (`/admin/approvals`) so you can test approving or rejecting them.
+
+| # | Full Name | Email / Login | Mobile Number | Gender | Role | Assigned / Requested Ward | Password | Status |
+|---|-----------|---------------|---------------|--------|------|---------------------------|----------|--------|
+| 1 | **Mahir Faysal** | `mahir.citizen@safaitrack.local` | `+8801912345001` | Male | Citizen | Ward 08 / Dhanmondi | `Pass1234!` | `PendingApproval` |
+| 2 | **Rafiqul Islam Babul** | `rafiq.driver@safaitrack.local` | `+8801712345002` | Male | Truck Driver | City-wide pool | `Pass1234!` | `PendingApproval` |
+| 3 | **Nusrat Jahan Chowdhury** | `nusrat.officer@safaitrack.local` | `+8801812345003` | Female | Ward Officer | Ward 08 / Dhanmondi | `Pass1234!` | `PendingApproval` |
+
+---
+
 ## Summary of Changes
 
 1. **Full Name Login Support**: You can now sign in by typing either the user's **Email** (e.g. `driver@safaitrack.local`) OR their **Full Name** (e.g. `Karim Driver`, `Farida Yasmin`, `Mahbub Alam`).
 2. **Distinct Bangladeshi Names**: All generic driver labels (`Driver 001`, etc.) and officer labels (`Officer - Ward 39`) have been replaced with distinct, dignified Bangladeshi names (with a natural mix of male and female names).
 3. **Bangladeshi Mobile Numbers**: Every single driver, officer, and citizen has a unique, properly-formatted Bangladeshi phone number (`+8801...`).
 4. **Registration Fields**: The registration screen now features a mandatory Bangladeshi phone number field (`+8801XXXXXXXXX`) with validation, and a gender selection dropdown (`Male`, `Female`, `Other`).
+5. **Admin Approvals Flow**: Public registrations require City Admin review before the account can log in.
+
