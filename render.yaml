@@ -64,7 +64,7 @@ services:
   - type: web
     name: safaitrack-client
     runtime: static
-    buildCommand: npm install -g pnpm && cd frontend/safai-track-client && pnpm install && pnpm run build
+    buildCommand: cd frontend/safai-track-client && npm install && npm run build
     staticPublishPath: ./frontend/safai-track-client/dist/public
     envVars:
       # Vite inlines this at build time, so changing it needs a redeploy of this
