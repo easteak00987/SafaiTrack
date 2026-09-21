@@ -2,6 +2,8 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SafaiTrack.Api.Data;
 using SafaiTrack.Api.Dtos;
 using SafaiTrack.Api.Models;
 using SafaiTrack.Api.Services;
@@ -18,17 +20,20 @@ public class AuthController : ControllerBase
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly ITokenService _tokenService;
+    private readonly ApplicationDbContext _context;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
         RoleManager<IdentityRole> roleManager,
-        ITokenService tokenService)
+        ITokenService tokenService,
+        ApplicationDbContext context)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _roleManager = roleManager;
         _tokenService = tokenService;
+        _context = context;
     }
 
     [HttpPost("register")]
@@ -62,12 +67,18 @@ public class AuthController : ControllerBase
         // Canonical casing for role
         var canonicalRole = AllowedRoles.First(r => r.Equals(dto.Role, StringComparison.OrdinalIgnoreCase));
 
+        if (dto.WardId is { } wardId && !await _context.Wards.AnyAsync(w => w.WardId == wardId))
+        {
+            return BadRequest(new { message = $"Ward with ID {wardId} does not exist." });
+        }
+
         var user = new ApplicationUser
         {
             UserName = dto.Email,
             Email = dto.Email,
             FullName = dto.FullName,
-            Role = canonicalRole
+            Role = canonicalRole,
+            WardId = dto.WardId
         };
 
         var result = await _userManager.CreateAsync(user, dto.Password);

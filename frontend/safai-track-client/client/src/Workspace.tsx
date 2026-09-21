@@ -11,8 +11,11 @@ import {
   useParams,
 } from "react-router-dom";
 import {
+  Banknote,
   Check,
+  CircleAlert,
   ClipboardList,
+  CreditCard,
   LayoutDashboard,
   LogOut,
   MapPin,
@@ -20,6 +23,7 @@ import {
   Plus,
   RefreshCw,
   Truck,
+  Wallet,
 } from "lucide-react";
 import { useAuth } from "./contexts/AuthContext";
 import { apiClient, apiError } from "./lib/api-client";
@@ -57,6 +61,59 @@ type CollectionRoute = {
 type Ward = { wardId: number; name: string };
 type Vehicle = { truckId: number; plateNumber: string; status: string };
 type Driver = { id: string; fullName: string; wardId: number };
+type Invoice = {
+  invoiceId: number;
+  invoiceNumber: string;
+  citizenName: string | null;
+  wardId: number;
+  wardName: string | null;
+  billingPeriodStart: string;
+  billingPeriodEnd: string;
+  amount: number;
+  currency: string;
+  issuedAt: string;
+  dueAt: string;
+  status: string;
+  isOverdue: boolean;
+  paidAt: string | null;
+};
+type PaymentRecord = {
+  paymentId: number;
+  invoiceId: number;
+  invoiceNumber: string | null;
+  transactionRef: string;
+  gateway: string;
+  amount: number;
+  currency: string;
+  status: string;
+  paymentMethod: string | null;
+  gatewayTransactionId: string | null;
+  failureReason: string | null;
+  initiatedAt: string;
+  completedAt: string | null;
+};
+type WardCollection = {
+  wardId: number;
+  wardName: string;
+  totalInvoices: number;
+  paidInvoices: number;
+  overdueInvoices: number;
+  amountBilled: number;
+  amountCollected: number;
+  amountOutstanding: number;
+  collectionRate: number;
+};
+type BillingSummary = {
+  amountBilled: number;
+  amountCollected: number;
+  amountOutstanding: number;
+  totalInvoices: number;
+  paidInvoices: number;
+  overdueInvoices: number;
+  collectionRate: number;
+  currency: string;
+  wards: WardCollection[];
+};
 const roleNames: Record<string, string> = {
   Citizen: "Citizen",
   Driver: "Truck Driver",
@@ -75,6 +132,24 @@ const utcDate = (date: string) =>
   new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(date) ? date : `${date}Z`);
 const when = (date: string) =>
   utcDate(date).toLocaleString("en-GB", { timeZone: "Asia/Dhaka" });
+const day = (date: string) =>
+  utcDate(date).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Dhaka",
+  });
+const billingPeriod = (date: string) =>
+  utcDate(date).toLocaleDateString("en-GB", {
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Dhaka",
+  });
+const money = (amount: number, currency = "BDT") =>
+  `${currency === "BDT" ? "৳" : `${currency} `}${amount.toLocaleString("en-GB", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
 function Status({ value }: { value: string }) {
   return (
     <span className={`ws-status ${value.toLowerCase()}`}>
@@ -140,6 +215,7 @@ function Shell() {
             icon: ClipboardList,
           },
           { to: "/citizen/report", label: "Report an issue", icon: Plus },
+          { to: "/billing", label: "Billing", icon: Wallet },
         ]
       : []),
     ...(user?.role === "Driver"
@@ -159,6 +235,7 @@ function Shell() {
             icon: Navigation,
           },
           { to: "/operations/fleet", label: "Fleet", icon: Truck },
+          { to: "/billing", label: "Revenue", icon: Wallet },
         ]
       : []),
   ];
@@ -1084,6 +1161,300 @@ function Fleet() {
     </>
   );
 }
+/**
+ * Shows the result the gateway sent us back with, then strips it from the URL so a
+ * refresh does not replay the message.
+ */
+function PaymentOutcome() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [notice, setNotice] = useState<{ outcome: string; message: string } | null>(
+    null
+  );
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const outcome = params.get("payment");
+    if (!outcome) return;
+    setNotice({
+      outcome,
+      message: params.get("message") || "The payment could not be completed.",
+    });
+    navigate(location.pathname, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+  if (!notice) return null;
+  return (
+    <div className={`ws-notice ${notice.outcome}`} role="status">
+      {notice.outcome === "success" ? <Check size={16} /> : <CircleAlert size={16} />}
+      {notice.message}
+    </div>
+  );
+}
+
+function CitizenBilling() {
+  const invoices = useData<Invoice[]>("/api/invoices");
+  const payments = useData<PaymentRecord[]>("/api/payments");
+  const [paying, setPaying] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const rows = invoices.data || [];
+  const outstanding = rows
+    .filter(i => i.status !== "Paid" && i.status !== "Cancelled")
+    .reduce((total, i) => total + i.amount, 0);
+  const settled = rows.filter(i => i.status === "Paid");
+  const pay = async (invoice: Invoice) => {
+    setPaying(invoice.invoiceId);
+    setError("");
+    try {
+      const { data } = await apiClient.post<{ redirectUrl: string }>(
+        "/api/payments/initiate",
+        { invoiceId: invoice.invoiceId }
+      );
+      // Hand the browser to the gateway's hosted checkout; it returns to /billing.
+      window.location.assign(data.redirectUrl);
+    } catch (e) {
+      setError(apiError(e));
+      setPaying(null);
+      void invoices.reload();
+    }
+  };
+  return (
+    <>
+      <Heading title="Billing">
+        <button
+          onClick={() => {
+            void invoices.reload();
+            void payments.reload();
+          }}
+        >
+          <RefreshCw size={16} />
+          Refresh
+        </button>
+      </Heading>
+      <PaymentOutcome />
+      <ErrorBox message={error} />
+      <ErrorBox message={invoices.error} retry={invoices.reload} />
+      <div className="ws-metrics">
+        <div>
+          <span>Outstanding</span>
+          <strong>{money(outstanding)}</strong>
+          <small>
+            {rows.filter(i => i.isOverdue).length} overdue
+          </small>
+        </div>
+        <div>
+          <span>Paid to date</span>
+          <strong>
+            {money(settled.reduce((total, i) => total + i.amount, 0))}
+          </strong>
+          <small>{settled.length} invoice(s) settled</small>
+        </div>
+        <div>
+          <span>Monthly collection fee</span>
+          <strong>{rows.length ? money(rows[0].amount) : "Not billed yet"}</strong>
+          <small>{rows[0]?.wardName || "Awaiting ward assignment"}</small>
+        </div>
+      </div>
+      {invoices.loading ? (
+        <p>Loading invoices...</p>
+      ) : rows.length ? (
+        <div className="ws-list">
+          {rows.map(invoice => (
+            <div className="ws-row" key={invoice.invoiceId}>
+              <div>
+                <strong>
+                  {billingPeriod(invoice.billingPeriodStart)} collection fee
+                </strong>
+                <small>
+                  {invoice.invoiceNumber} / {invoice.wardName}
+                </small>
+                <small>
+                  {invoice.status === "Paid" && invoice.paidAt
+                    ? `Paid ${when(invoice.paidAt)}`
+                    : `Due ${day(invoice.dueAt)}`}
+                </small>
+              </div>
+              <strong className="ws-amount">
+                {money(invoice.amount, invoice.currency)}
+              </strong>
+              <Status
+                value={invoice.isOverdue ? "Overdue" : invoice.status}
+              />
+              {invoice.status !== "Paid" && invoice.status !== "Cancelled" && (
+                <button
+                  className="ws-pay"
+                  disabled={paying !== null}
+                  onClick={() => void pay(invoice)}
+                >
+                  <CreditCard size={16} />
+                  {paying === invoice.invoiceId ? "Opening gateway..." : "Pay now"}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="ws-empty">
+          No collection fees have been billed to your household yet.
+        </p>
+      )}
+      <h2 className="ws-subhead">Transaction history</h2>
+      <ErrorBox message={payments.error} retry={payments.reload} />
+      {payments.loading ? (
+        <p>Loading transactions...</p>
+      ) : (payments.data || []).length ? (
+        <div className="ws-list">
+          {(payments.data || []).map(payment => (
+            <div className="ws-row" key={payment.paymentId}>
+              <div>
+                <strong>
+                  {payment.invoiceNumber || `Invoice #${payment.invoiceId}`}
+                </strong>
+                <small>
+                  {payment.gateway}
+                  {payment.paymentMethod ? ` / ${payment.paymentMethod}` : ""} /{" "}
+                  {payment.transactionRef}
+                </small>
+                <small>
+                  {payment.failureReason ||
+                    (payment.gatewayTransactionId
+                      ? `Gateway reference ${payment.gatewayTransactionId}`
+                      : "Awaiting gateway confirmation")}
+                </small>
+              </div>
+              <strong className="ws-amount">
+                {money(payment.amount, payment.currency)}
+              </strong>
+              <Status value={payment.status} />
+              <small className="ws-when">
+                {when(payment.completedAt || payment.initiatedAt)}
+              </small>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="ws-empty">No payment attempts recorded yet.</p>
+      )}
+    </>
+  );
+}
+
+function RevenueOverview() {
+  const { user } = useAuth();
+  const summary = useData<BillingSummary>("/api/invoices/summary");
+  const invoices = useData<Invoice[]>("/api/invoices");
+  const [running, setRunning] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const data = summary.data;
+  const runBilling = async () => {
+    setRunning(true);
+    setNotice("");
+    setError("");
+    try {
+      const response = await apiClient.post<{ message: string }>(
+        "/api/invoices/generate"
+      );
+      setNotice(response.data.message);
+      await Promise.all([summary.reload(), invoices.reload()]);
+    } catch (e) {
+      setError(apiError(e));
+    } finally {
+      setRunning(false);
+    }
+  };
+  return (
+    <>
+      <Heading title="Collection revenue">
+        {user?.role === "Admin" && (
+          <button disabled={running} onClick={() => void runBilling()}>
+            <Banknote size={16} />
+            {running ? "Billing..." : "Run billing"}
+          </button>
+        )}
+        <button
+          onClick={() => {
+            void summary.reload();
+            void invoices.reload();
+          }}
+        >
+          <RefreshCw size={16} />
+          Refresh
+        </button>
+      </Heading>
+      {notice && (
+        <div className="ws-notice success" role="status">
+          <Check size={16} />
+          {notice}
+        </div>
+      )}
+      <ErrorBox message={error} />
+      <ErrorBox message={summary.error} retry={summary.reload} />
+      {summary.loading ? (
+        <p>Loading collection revenue...</p>
+      ) : data ? (
+        <>
+          <div className="ws-metrics">
+            <div>
+              <span>Collected</span>
+              <strong>{money(data.amountCollected, data.currency)}</strong>
+              <small>
+                {data.paidInvoices} of {data.totalInvoices} invoices settled
+              </small>
+            </div>
+            <div>
+              <span>Collection rate</span>
+              <strong>{data.collectionRate}%</strong>
+              <small>Share of billed value recovered</small>
+            </div>
+            <div>
+              <span>Outstanding</span>
+              <strong>{money(data.amountOutstanding, data.currency)}</strong>
+              <small>{data.overdueInvoices} past due</small>
+            </div>
+          </div>
+          <h2 className="ws-subhead">By ward</h2>
+          {data.wards.length ? (
+            <div className="ws-list">
+              {data.wards.map(ward => (
+                <div className="ws-row" key={ward.wardId}>
+                  <div>
+                    <strong>{ward.wardName}</strong>
+                    <small>
+                      {ward.paidInvoices} paid / {ward.totalInvoices} billed
+                      {ward.overdueInvoices > 0
+                        ? ` / ${ward.overdueInvoices} overdue`
+                        : ""}
+                    </small>
+                    <small>
+                      Outstanding{" "}
+                      {money(ward.amountOutstanding, data.currency)}
+                    </small>
+                  </div>
+                  <strong className="ws-amount">
+                    {money(ward.amountCollected, data.currency)}
+                  </strong>
+                  <Status
+                    value={ward.collectionRate >= 75 ? "Healthy" : "Lagging"}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="ws-empty">
+              No collection fees have been billed yet. Run billing to issue this
+              month's invoices.
+            </p>
+          )}
+        </>
+      ) : null}
+    </>
+  );
+}
+
+function Billing() {
+  const { user } = useAuth();
+  return user?.role === "Citizen" ? <CitizenBilling /> : <RevenueOverview />;
+}
+
 function HomeRedirect() {
   const { user } = useAuth();
   return <Navigate to={home(user?.role)} replace />;
@@ -1105,6 +1476,9 @@ export default function WorkspaceRoutes({
       <Route element={<Guard />}>
         <Route element={<Shell />}>
           <Route path="/home" element={<HomeRedirect />} />
+          <Route element={<Guard roles={["Citizen", "Admin", "WardOfficer"]} />}>
+            <Route path="/billing" element={<Billing />} />
+          </Route>
           <Route element={<Guard roles={["Citizen"]} />}>
             <Route path="/citizen/dashboard" element={<Dashboard />} />
             <Route path="/citizen/complaints" element={<Complaints />} />

@@ -1,0 +1,58 @@
+name: CI
+
+# Render deploys on its own when you push to the connected branch, so this
+# workflow only guards that: it fails the push loudly if either app does not
+# build, rather than letting Render discover it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build API
+        working-directory: backend/SafaiTrack.Api
+        run: |
+          dotnet restore
+          dotnet build --configuration Release --no-restore
+
+      # Proves the image Render will build actually builds, before Render tries.
+      - name: Build container image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend/SafaiTrack.Api
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/safai-track-client/pnpm-lock.yaml
+
+      - name: Typecheck and build
+        working-directory: frontend/safai-track-client
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run check
+          pnpm run build
