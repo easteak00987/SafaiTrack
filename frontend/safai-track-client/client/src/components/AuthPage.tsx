@@ -86,19 +86,19 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
   const handleGoogleSignIn = async () => {
     setError("");
 
-    // Open real Google Accounts Login Window in browser
+    // Open official Google Accounts Window in browser without invalid client params
     try {
       window.open(
-        "https://accounts.google.com/AccountChooser?service=lso",
+        "https://accounts.google.com/AccountChooser",
         "GoogleSignIn",
-        "width=500,height=600,top=100,left=100"
+        "width=520,height=600,top=100,left=100"
       );
     } catch {
       /* Popup window fallback */
     }
 
-    // Pre-fill email if typed in main form
-    if (email) setGoogleEmailInput(email);
+    // Pre-fill Google email
+    setGoogleEmailInput(email || "fairuzanadi@gmail.com");
     if (name) setGoogleNameInput(name);
     setShowGoogleModal(true);
   };
