@@ -44,7 +44,7 @@ export function missingPasswordRequirements(password: string): string[] {
 }
 
 export default function AuthPage({ register = false, cityAdmin = false }: { register?: boolean; cityAdmin?: boolean }) {
-  const { login, isAuthenticated, initializing } = useAuth();
+  const { user, login, isAuthenticated, initializing } = useAuth();
   const navigate = useNavigate();
 
   const [role, setRole] = useState<UserRole>(() => {
@@ -96,7 +96,8 @@ export default function AuthPage({ register = false, cityAdmin = false }: { regi
 
   const missingRequirements = missingPasswordRequirements(password);
   if (initializing) return <p role="status">Restoring session...</p>;
-  if (isAuthenticated) return <Navigate to="/home" replace />;
+  if (isAuthenticated && (!cityAdmin || user?.role === "Admin")) return <Navigate to="/home" replace />;
+
 
   const ease = [0.16, 1, 0.3, 1] as const;
 
