@@ -190,6 +190,17 @@ public class ComplaintsController : ControllerBase
             return BadRequest(new { message = "Enter a reply or change the status." });
         _context.ComplaintUpdates.Add(new ComplaintUpdate { ComplaintId = id, AuthorId = actor!.Id,
             AuthorName = actor.FullName, Status = matchingStatus, Message = dto.Message?.Trim() ?? "Status updated." });
+        if (complaint.Status != matchingStatus)
+        {
+            _context.Notifications.Add(new Notification
+            {
+                UserId = complaint.CitizenId,
+                RelatedComplaintId = complaint.ComplaintId,
+                Message = $"Your complaint #{id} status changed to {matchingStatus}",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
         complaint.Status = matchingStatus;
         if (matchingStatus == "Resolved")
         {

@@ -13,14 +13,35 @@ interface AuthContextType {
   token: string | null;
   user: AuthUser | null;
   isAuthenticated: boolean;
+  initializing: boolean;
   login: (token: string, user: AuthUser) => void;
   logout: () => void;
 }
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+function storedToken(): string | null {
+  const value = localStorage.getItem("safaitrack_token");
+  if (!value) return null;
+  try {
+    const expiry = JSON.parse(
+      atob(value.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))
+    ).exp;
+    if (typeof expiry === "number" && expiry * 1000 > Date.now()) {
+      setAuthToken(value);
+      return value;
+    }
+  } catch {
+    /* Malformed tokens cannot restore a session. */
+  }
+  localStorage.removeItem("safaitrack_token");
+  return null;
+}
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(storedToken);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [initializing, setInitializing] = useState(!!token);
   const logout = () => {
+    localStorage.removeItem("safaitrack_token");
+    setInitializing(false);
     setAuthToken(null);
     setToken(null);
     setUser(null);
@@ -28,7 +49,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem("safaitrack_token");
   };
   const login = (value: string, profile: AuthUser) => {
+    localStorage.setItem("safaitrack_token", value);
     setAuthToken(value);
+    setInitializing(false);
     setToken(value);
     setUser(profile);
   };
@@ -53,7 +76,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     apiClient
       .get("/api/auth/me")
       .then(r => {
-        if (active) setUser(r.data);
+        if (active) {
+          setUser(r.data);
+          setInitializing(false);
+        }
       })
       .catch(() => {
         if (active) logout();
@@ -65,7 +91,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token]);
   return (
     <AuthContext.Provider
-      value={{ token, user, isAuthenticated: !!token, login, logout }}
+      value={{
+        token,
+        user,
+        isAuthenticated: !!token && !!user,
+        initializing,
+        login,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

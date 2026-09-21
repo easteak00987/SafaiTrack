@@ -20,43 +20,33 @@ import { useAuth } from "../contexts/AuthContext";
 import { apiClient, apiError } from "../lib/api-client";
 import { type UserRole } from "../lib/headerData";
 
-const ROLE_PRESETS: Record<
-  UserRole,
-  { email: string; name: string; backendRole: string }
-> = {
-  "Ward Officer": {
-    email: "officer08@safaitrack.local",
-    name: "Tariq Officer",
-    backendRole: "WardOfficer",
-  },
-  "Truck Driver": {
-    email: "driver01@safaitrack.local",
-    name: "Karim Driver",
-    backendRole: "Driver",
-  },
-  "Citizen": {
-    email: "citizen01@safaitrack.local",
-    name: "Rahim Citizen",
-    backendRole: "Citizen",
-  },
-  "City Admin": {
-    email: "admin@safaitrack.local",
-    name: "Test Admin",
-    backendRole: "Admin",
-  },
+const ROLE_PRESETS: Record<UserRole, { backendRole: string }> = {
+  "Ward Officer": { backendRole: "WardOfficer" },
+  "Truck Driver": { backendRole: "Driver" },
+  "Citizen": { backendRole: "Citizen" },
+  "City Admin": { backendRole: "Admin" },
 };
+export function missingPasswordRequirements(password: string): string[] {
+  return [
+    password.length < 8 && "at least 8 characters",
+    !/[a-z]/.test(password) && "a lowercase letter",
+    !/[A-Z]/.test(password) && "an uppercase letter",
+    !/[0-9]/.test(password) && "a number",
+    !/[^a-zA-Z0-9\s]/.test(password) && "a special character",
+  ].filter((requirement): requirement is string => typeof requirement === "string");
+}
 
 export default function AuthPage({ register = false }: { register?: boolean }) {
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, initializing } = useAuth();
   const navigate = useNavigate();
 
   const [role, setRole] = useState<UserRole>(() => {
     const stored = (typeof localStorage !== "undefined" ? localStorage.getItem("safaitrack_active_role") : null) as UserRole | null;
     return stored && ROLE_PRESETS[stored] ? stored : "Citizen";
   });
-  const [name, setName] = useState(ROLE_PRESETS[role]?.name || "");
-  const [email, setEmail] = useState(ROLE_PRESETS[role]?.email || "");
-  const [password, setPassword] = useState("Password123");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -76,12 +66,11 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
   const handleSelectRole = (newRole: UserRole) => {
     setRole(newRole);
     setRoleDropdownOpen(false);
-    setEmail(ROLE_PRESETS[newRole].email);
-    setName(ROLE_PRESETS[newRole].name);
-    setPassword("Password123");
     setError("");
   };
 
+  const missingRequirements = missingPasswordRequirements(password);
+  if (initializing) return <p role="status">Restoring session...</p>;
   if (isAuthenticated) return <Navigate to="/home" replace />;
 
   const ease = [0.16, 1, 0.3, 1] as const;
@@ -156,11 +145,16 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
         </motion.div>
         <motion.form
           className="auth-form"
+          autoComplete="off"
           initial={{ opacity: 0, x: 30 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, ease }}
           onSubmit={async event => {
             event.preventDefault();
+            if (register && missingRequirements.length) {
+              setError(`Password requires ${missingRequirements.join(", ")}.`);
+              return;
+            }
             setBusy(true);
             setError("");
             try {
@@ -172,7 +166,7 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
                   email: emailToUse,
                   password,
                   ...(register
-                    ? { fullName: name.trim() || ROLE_PRESETS[role].name, role: backendRole }
+                    ? { fullName: name.trim(), role: backendRole }
                     : {}),
                 }
               );
@@ -223,7 +217,7 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
                     onChange={e => setName(e.target.value)}
                     required
                     maxLength={120}
-                    autoComplete="name"
+                    autoComplete="off"
                     placeholder="e.g. Kabir Hossain"
                   />
                 </div>
@@ -240,7 +234,7 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required
-                  autoComplete="username"
+                  autoComplete="off"
                   placeholder="you@example.com"
                 />
               </div>
@@ -256,8 +250,10 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
-                  minLength={register ? 6 : 1}
-                  autoComplete={register ? "new-password" : "current-password"}
+                  minLength={register ? 8 : 1}
+                  autoComplete="new-password"
+                  aria-describedby={register ? "password-requirements" : undefined}
+                  aria-invalid={register && missingRequirements.length > 0}
                   placeholder="Enter your access key"
                 />
                 <button
@@ -270,6 +266,10 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
                 </button>
               </div>
             </div>
+
+            {register && missingRequirements.length > 0 && (
+              <p id="password-requirements" role="alert">Password requires {missingRequirements.join(", ")}.</p>
+            )}
 
             {/* Access as dropdown */}
             <div className="field-group">
@@ -363,7 +363,7 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
               aria-label={register ? "Create account" : "Sign in"}
               whileHover={{ scale: busy ? 1 : 1.02 }}
               whileTap={{ scale: busy ? 1 : 0.98 }}
-              disabled={busy}
+              disabled={busy || (register && missingRequirements.length > 0)}
               className="lime-button full open-access-btn"
             >
               {busy

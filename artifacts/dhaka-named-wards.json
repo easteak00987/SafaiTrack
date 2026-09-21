@@ -1,0 +1,596 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-09-20T22:22:00Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+    {
+      "type": "node",
+      "id": 830037031,
+      "lat": 23.7264045,
+      "lon": 90.3897246,
+      "tags": {
+        "name": "Suhrawardy Hall",
+        "operator": "BUET",
+        "tourism": "hostel"
+      }
+    },
+    {
+      "type": "node",
+      "id": 3712268826,
+      "lat": 23.7110563,
+      "lon": 90.4233134,
+      "tags": {
+        "name": "Councilor Office of 40 no. Ward"
+      }
+    },
+    {
+      "type": "node",
+      "id": 3804611550,
+      "lat": 23.8191184,
+      "lon": 90.3801747,
+      "tags": {
+        "name": "Office of the Councelor, Ward 3",
+        "office": "government",
+        "operator": "Dhaka City Corporation"
+      }
+    },
+    {
+      "type": "node",
+      "id": 3810791202,
+      "lat": 23.8133375,
+      "lon": 90.3740746,
+      "tags": {
+        "addr:city": "Mirpur 10, Dhaka",
+        "addr:housenumber": "House 4, Block D",
+        "addr:postcode": "1216",
+        "addr:street": "Road 34",
+        "name": "৩ নং ওয়ার্ড ঢাকা সিটি কর্পোরেশন (উত্তর) কাউন্সিলর অফিস",
+        "name:bn": "৩ নং ওয়ার্ড ঢাকা সিটি কর্পোরেশন (নর্থ) কাউন্সিলর অফিস",
+        "name:en": "3 no. Ward Dhaka City Corporation (north) Councilor Office",
+        "office": "government",
+        "opening_hours": "09:00-17:00; Fr-Sa off"
+      }
+    },
+    {
+      "type": "node",
+      "id": 4322833435,
+      "lat": 23.817936,
+      "lon": 90.3671113,
+      "tags": {
+        "addr:city": "Dhaka",
+        "addr:housenumber": "১৩/১",
+        "addr:street": "৬",
+        "addr:suburb": "Mirpur-11",
+        "identifier": "310",
+        "name": "5 no ward commissionaire office(৫ নং ওয়ার্ড কমিশনার অফিস)",
+        "office": "government"
+      }
+    },
+    {
+      "type": "node",
+      "id": 4389004391,
+      "lat": 23.7605762,
+      "lon": 90.3598692,
+      "tags": {
+        "description": "This is a fine example of arcitectural merit.",
+        "level": "7",
+        "name": "Minarat for calling towards prayer.",
+        "note": "Look at the minarat from the east at afternoon. It looks marvelous."
+      }
+    },
+    {
+      "type": "node",
+      "id": 4528171599,
+      "lat": 23.7616748,
+      "lon": 90.3717468,
+      "tags": {
+        "name": "Office Of The Ward Comissioner",
+        "office": "government"
+      }
+    },
+    {
+      "type": "node",
+      "id": 5298993126,
+      "lat": 23.7403639,
+      "lon": 90.395134,
+      "tags": {
+        "addr:street": "কাজী নজরুল ইসলাম সরণী",
+        "amenity": "hospital",
+        "healthcare": "hospital",
+        "name:en": "Physical Medicine and Rehabilitation Ward"
+      }
+    },
+    {
+      "type": "node",
+      "id": 5342132622,
+      "lat": 23.7687483,
+      "lon": 90.3695214,
+      "tags": {
+        "addr:street": "Mirpur Road",
+        "amenity": "hospital",
+        "internet_access": "wlan",
+        "name": "শহীদ সোহরাওয়ার্দী মেডিক্যাল কলেজ হাসপাতাল",
+        "name:bn": "শহীদ সোহরাওয়ার্দী মেডিক্যাল কলেজ হাসপাতাল",
+        "name:en": "Shaheed Suhrawardi Medical College Hospital",
+        "opening_hours": "24/7",
+        "wheelchair": "yes"
+      }
+    },
+    {
+      "type": "node",
+      "id": 6900269014,
+      "lat": 23.7691814,
+      "lon": 90.3713444,
+      "tags": {
+        "addr:city": "Dhaka",
+        "addr:housename": "Shahid Sohrawardy Medical College and Hospital",
+        "addr:postcode": "1207",
+        "addr:street": "Mirpur Road",
+        "addr:suburb": "Sher E Bangla Nagar",
+        "amenity": "hospital",
+        "healthcare": "hospital",
+        "name": "Shahid Sohrawardy Medical College and Hospital"
+      }
+    },
+    {
+      "type": "node",
+      "id": 7871824741,
+      "lat": 23.7544723,
+      "lon": 90.3617509,
+      "tags": {
+        "name": "Bangladesh Awami Legue Ward Office",
+        "office": "political_party"
+      }
+    },
+    {
+      "type": "node",
+      "id": 9526565755,
+      "lat": 23.7069739,
+      "lon": 90.4179234,
+      "tags": {
+        "addr:street": "R M Das Lane",
+        "amenity": "doctors",
+        "name": "Dr. Edward Pallab Rozario"
+      }
+    },
+    {
+      "type": "node",
+      "id": 9576995556,
+      "lat": 23.708932,
+      "lon": 90.416467,
+      "tags": {
+        "amenity": "pharmacy",
+        "name": "Govt. Shahid Suhrawardy College Pharmacy"
+      }
+    },
+    {
+      "type": "node",
+      "id": 9684909174,
+      "lat": 23.7336615,
+      "lon": 90.397144,
+      "tags": {
+        "leisure": "park",
+        "name": "Suhrawardy Udyan"
+      }
+    },
+    {
+      "type": "node",
+      "id": 9702394428,
+      "lat": 23.7356742,
+      "lon": 90.3890355,
+      "tags": {
+        "name": "Shikdar Award",
+        "shop": "gift"
+      }
+    },
+    {
+      "type": "node",
+      "id": 9812614680,
+      "lat": 23.8446784,
+      "lon": 90.3878345,
+      "tags": {
+        "addr:street": "Bawnia Bazar",
+        "name": "52 ward temporary office",
+        "office": "government"
+      }
+    },
+    {
+      "type": "node",
+      "id": 11602190844,
+      "lat": 23.7364749,
+      "lon": 90.3896516,
+      "tags": {
+        "name": "Spondon Award",
+        "shop": "gift"
+      }
+    },
+    {
+      "type": "node",
+      "id": 11607167775,
+      "lat": 23.7358525,
+      "lon": 90.3891519,
+      "tags": {
+        "name": "Nandonic Award",
+        "shop": "gift"
+      }
+    },
+    {
+      "type": "node",
+      "id": 11652427711,
+      "lat": 23.658711,
+      "lon": 90.3625965,
+      "tags": {
+        "amenity": "place_of_worship",
+        "name": "Kalakandi East Ward Jame Masjid, Abdullahpur, Kalakandi",
+        "religion": "muslim"
+      }
+    },
+    {
+      "type": "node",
+      "id": 11780070346,
+      "lat": 23.7166416,
+      "lon": 90.4217938,
+      "tags": {
+        "name": "Office of the Ward Commissioner, Ward: 39, Government office, Hatkhola Rd, Dhaka",
+        "office": "yes"
+      }
+    },
+    {
+      "type": "node",
+      "id": 11786388487,
+      "lat": 23.7215936,
+      "lon": 90.4167481,
+      "tags": {
+        "amenity": "pharmacy",
+        "healthcare": "pharmacy",
+        "name": "Central Homeopathic Pharmacy, Homeopathic pharmacy, Joykali Mandir Ward, Dhaka"
+      }
+    },
+    {
+      "type": "node",
+      "id": 11786406961,
+      "lat": 23.722016,
+      "lon": 90.415703,
+      "tags": {
+        "name": "DSCC Ward Councillor Office 38 ~ Kaptan Bazar, Local government office, Khandoker Rd, Dhaka",
+        "office": "government"
+      }
+    },
+    {
+      "type": "node",
+      "id": 11786455808,
+      "lat": 23.7224421,
+      "lon": 90.412902,
+      "tags": {
+        "amenity": "place_of_worship",
+        "name": "Hossain Shahid Sohrawardi Jame Masjid - Kaptan Bazar, Kaptan Bazar, Nawabpur, Dhaka",
+        "religion": "muslim"
+      }
+    },
+    {
+      "type": "node",
+      "id": 11821745731,
+      "lat": 23.7244392,
+      "lon": 90.4001493,
+      "tags": {
+        "amenity": "bank",
+        "name": "Janata Bank PLC | DMCH Corporate Branch, Suhrawardi Uddan Rd, Dhaka"
+      }
+    },
+    {
+      "type": "node",
+      "id": 11936265582,
+      "lat": 23.8124338,
+      "lon": 90.4250996,
+      "tags": {
+        "amenity": "school",
+        "name": "Warding Preperatory School"
+      }
+    },
+    {
+      "type": "node",
+      "id": 11950407547,
+      "lat": 23.7846421,
+      "lon": 90.3677065,
+      "tags": {
+        "name": "men's wardrobe",
+        "shop": "clothes"
+      }
+    },
+    {
+      "type": "node",
+      "id": 12057094219,
+      "lat": 23.7135539,
+      "lon": 90.4318715,
+      "tags": {
+        "name": "DSCC Ward Councilor Office No. 48",
+        "office": "government"
+      }
+    },
+    {
+      "type": "node",
+      "id": 12514061865,
+      "lat": 23.7683664,
+      "lon": 90.3715763,
+      "tags": {
+        "amenity": "place_of_worship",
+        "name": "Suhrawardy Medical College Hostel Jame Masjid, Mosque",
+        "religion": "muslim"
+      }
+    },
+    {
+      "type": "node",
+      "id": 13527564201,
+      "lat": 23.8065242,
+      "lon": 90.3792152,
+      "tags": {
+        "amenity": "community_centre",
+        "name": "ওয়ার্ড-৪ কমিউনিটি সেন্টার (ডিএনসিসি) শপিং কমপ্লেক্স",
+        "name:en": "Ward 4 Community Centre (DNCC) Shopping Complex"
+      }
+    },
+    {
+      "type": "node",
+      "id": 13758537202,
+      "lat": 23.7890751,
+      "lon": 90.3618523,
+      "tags": {
+        "name": "Bangladesh jamaat-e-Islami local ward office",
+        "office": "ngo"
+      }
+    },
+    {
+      "type": "way",
+      "id": 23895815,
+      "center": {
+        "lat": 23.7975294,
+        "lon": 90.4225781
+      },
+      "tags": {
+        "highway": "residential",
+        "name": "সোহরাওয়ার্দী এভিনিউ",
+        "name:en": "Sohrawardy Avenue",
+        "oneway": "no"
+      }
+    },
+    {
+      "type": "way",
+      "id": 234110017,
+      "center": {
+        "lat": 23.7218633,
+        "lon": 90.3983509
+      },
+      "tags": {
+        "building": "yes",
+        "building:levels": "1",
+        "name": "B N P 63 no Ward office"
+      }
+    },
+    {
+      "type": "way",
+      "id": 234110018,
+      "center": {
+        "lat": 23.72187,
+        "lon": 90.3982777
+      },
+      "tags": {
+        "building": "yes",
+        "building:levels": "1",
+        "name": "B N P 63 no Ward office"
+      }
+    },
+    {
+      "type": "way",
+      "id": 259718467,
+      "center": {
+        "lat": 23.7327365,
+        "lon": 90.3984267
+      },
+      "tags": {
+        "landuse": "recreation_ground",
+        "leisure": "sports_centre",
+        "name": "সোহরাওয়ার্দী উদ্যান",
+        "name:bn": "সোহরাওয়ার্দী উদ্যান",
+        "name:en": "Suhrawardy Udyan",
+        "name:hi": "सुहरावर्दी उद्यान",
+        "old_name": "Ramna Race Course",
+        "source": "GNS",
+        "sport": "horse_racing",
+        "wikidata": "Q3347064",
+        "wikimedia_commons": "Category:Suhrawardy Udyan",
+        "wikipedia": "en:Suhrawardy Udyan"
+      }
+    },
+    {
+      "type": "way",
+      "id": 295388835,
+      "center": {
+        "lat": 23.7691838,
+        "lon": 90.3710271
+      },
+      "tags": {
+        "building": "hospital",
+        "name": "শহীদ সোহরাওয়ার্দী মেডিক্যাল কলেজ ও হাসপাতাল",
+        "name:bn": "শহীদ সোহরাওয়ার্দী মেডিক্যাল কলেজ ও হাসপাতাল",
+        "name:en": "Shaheed Suhrawardi Medical College and Hospital",
+        "wikidata": "Q7461556",
+        "wikipedia": "en:Shaheed Suhrawardy Medical College Hospital"
+      }
+    },
+    {
+      "type": "way",
+      "id": 305527242,
+      "center": {
+        "lat": 23.8878225,
+        "lon": 90.412432
+      },
+      "tags": {
+        "highway": "residential",
+        "name": "Shohid Sohrawardi Road"
+      }
+    },
+    {
+      "type": "way",
+      "id": 323704354,
+      "center": {
+        "lat": 23.7041917,
+        "lon": 90.4235939
+      },
+      "tags": {
+        "addr:city": "Dhaka",
+        "addr:housenumber": "28",
+        "addr:street": "Rajani Chowhury Road",
+        "amenity": "bank",
+        "building": "commercial",
+        "building:condition": "average",
+        "building:levels": "2",
+        "building:material": "brick",
+        "name": "Maktab Ward Estate",
+        "office": "insurance",
+        "source": "Data4Action BDRCS / Red Cross"
+      }
+    },
+    {
+      "type": "way",
+      "id": 373163705,
+      "center": {
+        "lat": 23.8120692,
+        "lon": 90.3741538
+      },
+      "tags": {
+        "building": "industrial",
+        "name": "3 No ward counselor Office"
+      }
+    },
+    {
+      "type": "way",
+      "id": 435037012,
+      "center": {
+        "lat": 23.8116358,
+        "lon": 90.3664137
+      },
+      "tags": {
+        "building": "yes",
+        "check_date": "2025-07-08",
+        "leisure": "stadium",
+        "name": "শহীদ সোহরাওয়ার্দী ইনডোর স্টেডিয়াম",
+        "name:en": "Shaheed Suhrawardi Indoor Stadium",
+        "note": "I am using Imagery Offset here. Download \"imagery_offset_db\" from JOSM Plugin list and find the stored offset. Also, everything is drawn by cross checking between the source imageries.",
+        "source": "Bing, ESRI, Digital Globe +Vivid",
+        "sport": "badminton;multi;basketball;volleyball;chess"
+      }
+    },
+    {
+      "type": "way",
+      "id": 497317989,
+      "center": {
+        "lat": 23.7090453,
+        "lon": 90.4165047
+      },
+      "tags": {
+        "addr:city": "Dhaka",
+        "addr:postcode": "1100",
+        "addr:street": "R M Das Lane",
+        "amenity": "college",
+        "building": "college",
+        "building:levels": "4",
+        "name": "শহীদ সোহরাওয়ার্দি কলেজ",
+        "name:bn": "শহীদ সোহরাওয়ার্দি কলেজ",
+        "name:en": "Shaheed Suhrawardy College",
+        "nohousenumber": "yes",
+        "roof:shape": "flat",
+        "source": "Digital Globe Premium Imagery"
+      }
+    },
+    {
+      "type": "way",
+      "id": 946778469,
+      "center": {
+        "lat": 23.8037341,
+        "lon": 90.4221956
+      },
+      "tags": {
+        "highway": "residential",
+        "name": "সোহরাওয়ার্দী এভিনিউ",
+        "name:en": "Sohrawardy Avenue",
+        "oneway": "no"
+      }
+    },
+    {
+      "type": "way",
+      "id": 1015231181,
+      "center": {
+        "lat": 23.708963,
+        "lon": 90.4165858
+      },
+      "tags": {
+        "addr:city": "Dhaka",
+        "amenity": "college",
+        "name": "সরকারী শহীদ সোহরাওয়ার্দী কলেজ",
+        "name:bn": "সরকারী শহীদ সোহরাওয়ার্দী কলেজ",
+        "name:en": "Government Shaheed Suhrawardy College",
+        "old_name": "কায়েদ-ই-আজম কলেজ",
+        "operator": "Government",
+        "operator:type": "government"
+      }
+    },
+    {
+      "type": "way",
+      "id": 1314983129,
+      "center": {
+        "lat": 23.7977939,
+        "lon": 90.4232699
+      },
+      "tags": {
+        "access": "no",
+        "bicycle": "no",
+        "foot": "no",
+        "highway": "residential",
+        "lanes": "1",
+        "motor_vehicle": "no",
+        "name": "সোহরাওয়ার্দী এভিনিউ",
+        "name:en": "Sohrawardy Avenue"
+      }
+    },
+    {
+      "type": "way",
+      "id": 1420940400,
+      "center": {
+        "lat": 23.7398577,
+        "lon": 90.4301596
+      },
+      "tags": {
+        "addr:place": "দক্ষিণ বাসাবো",
+        "addr:postcode": "1214",
+        "amenity": "waste_transfer_station",
+        "name": "অন্তবরর্তীকালীন বর্জ্য স্থানান্তর কেন্দ্র - ওয়ার্ড ০৪",
+        "name:en": "Interim Waste Transfer Centre - Ward 04",
+        "operator": "DSCC",
+        "operator:type": "government",
+        "waste": "mixed"
+      }
+    },
+    {
+      "type": "relation",
+      "id": 12701072,
+      "center": {
+        "lat": 23.7335142,
+        "lon": 90.3985661
+      },
+      "tags": {
+        "intermittent": "no",
+        "name": "Suhrawardy Udyan Lake",
+        "name:bn": "সোহরাওয়ার্দি উদ্যান লেক",
+        "name:hi": "सुहरावर्दी उद्यान झील",
+        "natural": "water",
+        "salt": "no",
+        "tidal": "no",
+        "type": "multipolygon",
+        "water": "lake"
+      }
+    }
+  ]
+}

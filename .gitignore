@@ -42,6 +42,9 @@ pnpm-debug.log*
 backend-api*.log
 frontend-dev*.log
 test-results/
+tools/*_output.txt
+artifacts/part*-check.txt
+artifacts/dhaka-import-cache/
 lerna-debug.log*
 
 # --------------------------------------------------
@@ -72,6 +75,7 @@ Thumbs.db
 # Antigravity / Agentic IDE local state
 # --------------------------------------------------
 .antigravity/
+.puku/
 
 # --------------------------------------------------
 # Complaint Photo Uploads (never commit real files)

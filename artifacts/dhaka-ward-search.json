@@ -1,0 +1,124 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-09-20T22:21:00Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+    {
+      "type": "way",
+      "id": 318722840,
+      "center": {
+        "lat": 23.7632433,
+        "lon": 90.3603262
+      },
+      "tags": {
+        "admin_level": "8",
+        "boundary": "administrative",
+        "name": "মোহাম্মদপুর",
+        "name:bn": "মোহাম্মদপুর",
+        "name:en": "Mohammadpur",
+        "name:hi": "मुहम्मदपुर",
+        "place": "suburb",
+        "source": "Open Cities Dhaka Survey",
+        "wikidata": "Q3347514",
+        "wikipedia": "bn:মোহাম্মদপুর থানা"
+      }
+    },
+    {
+      "type": "way",
+      "id": 431816267,
+      "center": {
+        "lat": 23.8182114,
+        "lon": 90.3745772
+      },
+      "tags": {
+        "admin_level": "10",
+        "boundary": "administrative",
+        "name": "মিরপুর ১১",
+        "name:bn": "মিরপুর ১১",
+        "name:en": "Mirpur 11",
+        "place": "suburb"
+      }
+    },
+    {
+      "type": "way",
+      "id": 437400178,
+      "center": {
+        "lat": 23.8251863,
+        "lon": 90.3708206
+      },
+      "tags": {
+        "admin_level": "10",
+        "boundary": "administrative",
+        "name": "মিরপুর ১২",
+        "name:bn": "মিরপুর ১২",
+        "name:en": "Mirpur 12",
+        "place": "borough"
+      }
+    },
+    {
+      "type": "way",
+      "id": 443149122,
+      "center": {
+        "lat": 23.8101585,
+        "lon": 90.372021
+      },
+      "tags": {
+        "admin_level": "10",
+        "boundary": "administrative",
+        "name": "মিরপুর ১০",
+        "name:bn": "মিরপুর ১০",
+        "name:en": "Mirpur 10",
+        "place": "borough"
+      }
+    },
+    {
+      "type": "way",
+      "id": 443173143,
+      "center": {
+        "lat": 23.8182114,
+        "lon": 90.3743962
+      },
+      "tags": {
+        "admin_level": "10",
+        "boundary": "administrative",
+        "name": "মিরপুর ১১",
+        "name:bn": "মিরপুর ১১",
+        "name:en": "Mirpur 11",
+        "place": "quarter"
+      }
+    },
+    {
+      "type": "way",
+      "id": 448452105,
+      "center": {
+        "lat": 23.8190182,
+        "lon": 90.3628109
+      },
+      "tags": {
+        "admin_level": "10",
+        "boundary": "administrative",
+        "name": "মিরপুর ৭",
+        "name:bn": "মিরপুর ৭",
+        "name:en": "Mirpur 7",
+        "place": "borough"
+      }
+    },
+    {
+      "type": "relation",
+      "id": 18001938,
+      "center": {
+        "lat": 23.8063662,
+        "lon": 90.3568913
+      },
+      "tags": {
+        "admin_level": "10",
+        "boundary": "administrative",
+        "name": "Mirpur 2",
+        "type": "boundary"
+      }
+    }
+  ]
+}

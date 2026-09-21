@@ -33,10 +33,12 @@ import {
   UserProfile,
   DEMO_PROFILES,
   AppNotification,
-  INITIAL_NOTIFICATIONS,
   SearchItem,
   SEARCH_ITEMS,
 } from "../lib/headerData";
+
+import { apiClient, apiError } from "../lib/api-client";
+import { useAuth } from "../contexts/AuthContext";
 
 export type { UserRole, UserProfile, AppNotification, SearchItem };
 
@@ -51,15 +53,6 @@ export function HeaderActions({ currentUser, setCurrentUser }: HeaderActionsProp
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
-
-  // Active role preview filter inside notification drawer
-  const [activeNotifRole, setActiveNotifRole] = useState<UserRole>(currentUser.role);
-  const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
-
-  // Sync notification filter if the global user role changes
-  useEffect(() => {
-    setActiveNotifRole(currentUser.role);
-  }, [currentUser.role]);
 
   // Keyboard shortcut Ctrl+K / Cmd+K to open search
   useEffect(() => {
@@ -77,40 +70,9 @@ export function HeaderActions({ currentUser, setCurrentUser }: HeaderActionsProp
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // City Admin can toggle feeds across all roles; other roles are strictly locked to their own feed
-  const isCityAdmin = currentUser.role === "City Admin";
-  const effectiveRole = isCityAdmin ? activeNotifRole : currentUser.role;
-
-  // Filtered notifications for the effective role
-  const roleNotifications = useMemo(() => {
-    return notifications.filter((n) => n.role === effectiveRole);
-  }, [notifications, effectiveRole]);
-
-  const unreadCount = useMemo(() => {
-    return notifications.filter((n) => n.role === currentUser.role && !n.read).length;
-  }, [notifications, currentUser.role]);
-
-  const markAllAsRead = () => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.role === effectiveRole ? { ...n, read: true } : n))
-    );
-    toast.success(`All ${effectiveRole} notifications marked as read`);
-  };
-
-  const handleNotificationClick = (notif: AppNotification) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n))
-    );
-    setNotifOpen(false);
-    if (notif.link) {
-      navigate(notif.link);
-    }
-  };
-
   const handleRoleSwitch = (newRole: UserRole) => {
     const profile = DEMO_PROFILES[newRole];
     setCurrentUser(profile);
-    setActiveNotifRole(newRole);
     setProfileOpen(false);
     toast.success(`Switched role to ${newRole} (${profile.name})`);
   };
@@ -129,40 +91,7 @@ export function HeaderActions({ currentUser, setCurrentUser }: HeaderActionsProp
           <span className="kbd-shortcut">⌘K</span>
         </button>
 
-        {/* 2. Notification Button (Enlarged + Pulse pip) */}
-        <div className="popover-anchor">
-          <button
-            className={`icon-button icon-button-lg ${notifOpen ? "active" : ""}`}
-            onClick={() => {
-              setNotifOpen((prev) => !prev);
-              setProfileOpen(false);
-            }}
-            title="Notifications"
-            aria-label="Notifications"
-          >
-            <Bell size={22} strokeWidth={2.2} />
-            {unreadCount > 0 && (
-              <span className="notification-badge-pulse" title={`${unreadCount} unread`}>
-                {unreadCount}
-              </span>
-            )}
-          </button>
-
-          {/* Notification Popover */}
-          <AnimatePresence>
-            {notifOpen && (
-              <NotificationDrawer
-                activeRole={activeNotifRole}
-                setActiveRole={setActiveNotifRole}
-                currentUserRole={currentUser.role}
-                notifications={roleNotifications}
-                onMarkAllRead={markAllAsRead}
-                onItemClick={handleNotificationClick}
-                onClose={() => setNotifOpen(false)}
-              />
-            )}
-          </AnimatePresence>
-        </div>
+        <NotificationAction currentUserRole={currentUser.role} />
 
         {/* 3. User Avatar Profile Button (Enlarged) */}
         <div className="popover-anchor">
@@ -232,6 +161,66 @@ export function HeaderActions({ currentUser, setCurrentUser }: HeaderActionsProp
       </AnimatePresence>
     </>
   );
+}
+
+type StoredNotification = {
+  notificationId: number; message: string; relatedComplaintId: number | null;
+  isRead: boolean; createdAt: string;
+};
+
+export function NotificationAction({ currentUserRole }: { currentUserRole: UserRole }) {
+  const { token } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<AppNotification[]>([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let active = true;
+    setItems([]);
+    setLoading(true);
+    const refresh = async () => {
+      try {
+        const { data } = await apiClient.get<StoredNotification[]>("/api/notifications");
+        if (!active) return;
+        setItems(data.map(n => ({
+          id: String(n.notificationId), role: currentUserRole,
+          title: "Complaint status updated", message: n.message, read: n.isRead,
+          category: "info", timestamp: new Date(/Z$|[+-]\d{2}:\d{2}$/.test(n.createdAt) ? n.createdAt : n.createdAt + "Z").toLocaleString(),
+          link: n.relatedComplaintId ? `/citizen/complaints/${n.relatedComplaintId}` : undefined,
+        })));
+        setError("");
+      } catch (e) { if (active) setError(apiError(e)); }
+      finally { if (active) setLoading(false); }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 30000);
+    return () => { active = false; clearInterval(timer); };
+  }, [token, currentUserRole, open]);
+  const markRead = async (item: AppNotification) => {
+    if (item.read) return;
+    await apiClient.put(`/api/notifications/${item.id}/read`);
+    setItems(previous => previous.map(n => n.id === item.id ? { ...n, read: true } : n));
+  };
+  const unread = items.filter(n => !n.read).length;
+  return <div className="popover-anchor">
+    <button className={`icon-button icon-button-lg ${open ? "active" : ""}`}
+      aria-label="Notifications" title="Notifications" onClick={() => setOpen(value => !value)}>
+      <Bell size={22} strokeWidth={2.2} />
+      {unread > 0 && <span className="notification-badge-pulse">{unread}</span>}
+    </button>
+    <AnimatePresence>{open && <NotificationDrawer
+      activeRole={currentUserRole} currentUserRole={currentUserRole}
+      notifications={items} loading={loading} error={error}
+      onMarkAllRead={async () => {
+        try { await Promise.all(items.filter(n => !n.read).map(markRead)); setError(""); }
+        catch (e) { setError(apiError(e)); }
+      }}
+      onItemClick={async item => {
+        try { await markRead(item); setOpen(false); if (item.link) navigate(item.link); }
+        catch (e) { setError(apiError(e)); }
+      }} onClose={() => setOpen(false)} />}</AnimatePresence>
+  </div>;
 }
 
 // -------------------------------------------------------------
@@ -392,22 +381,23 @@ function SearchPalette({
 // -------------------------------------------------------------
 function NotificationDrawer({
   activeRole,
-  setActiveRole,
   currentUserRole,
   notifications,
   onMarkAllRead,
   onItemClick,
   onClose,
+  loading,
+  error,
 }: {
+  loading: boolean;
+  error: string;
   activeRole: UserRole;
-  setActiveRole: (role: UserRole) => void;
   currentUserRole: UserRole;
   notifications: AppNotification[];
   onMarkAllRead: () => void;
   onItemClick: (notif: AppNotification) => void;
   onClose: () => void;
 }) {
-  const roles: UserRole[] = ["Ward Officer", "Citizen", "Truck Driver", "City Admin"];
 
   return (
     <motion.div
@@ -428,46 +418,19 @@ function NotificationDrawer({
           <button className="notif-link-btn" onClick={onMarkAllRead}>
             Mark all read
           </button>
-          <button className="notif-close-btn" onClick={onClose}>
+          <button className="notif-close-btn" aria-label="Close notifications" style={{ color: "#103b3c" }} onClick={onClose}>
             <X size={17} />
           </button>
         </div>
       </div>
 
-      {/* Role Switcher Tabs - Strictly restricted to City Admin */}
-      {currentUserRole === "City Admin" ? (
-        <div className="notif-role-tabs">
-          <div className="role-tabs-kicker">
-            <span>SHOW FEED FOR:</span>
-            <span className="admin-access-tag">ADMIN PRIVILEGE</span>
-          </div>
-          <div className="role-pills">
-            {roles.map((r) => (
-              <button
-                key={r}
-                className={`role-pill ${activeRole === r ? "active" : ""}`}
-                onClick={() => setActiveRole(r)}
-              >
-                {r === currentUserRole && <span className="active-dot" />}
-                {r}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="notif-role-tabs locked">
-          <div className="locked-role-info">
-            <span className="locked-role-chip">
-              <span className="role-active-dot" /> {currentUserRole} Feed
-            </span>
-            <span className="locked-role-sub">Official channel signals</span>
-          </div>
-        </div>
-      )}
-
+      <div className="notif-role-tabs locked"><div className="locked-role-info">
+        <span className="locked-role-chip">{currentUserRole} Feed</span>
+      </div></div>
+      {error && <p role="alert">{error}</p>}
       {/* Notification items */}
       <div className="notif-items-container">
-        {notifications.length > 0 ? (
+        {loading ? <p role="status">Loading notifications...</p> : notifications.length > 0 ? (
           notifications.map((n) => (
             <div
               key={n.id}
@@ -501,7 +464,7 @@ function NotificationDrawer({
           <div className="notif-empty">
             <Check size={28} />
             <p>All caught up!</p>
-            <small>No unread signals for {activeRole}</small>
+            <small>No notifications for {activeRole}</small>
           </div>
         )}
       </div>
@@ -674,7 +637,7 @@ function EditProfileModal({
             </span>
             <h2>Edit Personal Information</h2>
           </div>
-          <button className="notif-close-btn" onClick={onClose}>
+          <button className="notif-close-btn" aria-label="Close notifications" style={{ color: "#103b3c" }} onClick={onClose}>
             <X size={18} />
           </button>
         </div>

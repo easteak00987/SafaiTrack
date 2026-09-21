@@ -1,0 +1,9 @@
+{
+  "source": "OpenStreetMap / Overpass",
+  "administrativeAreasReturned": 7,
+  "wardsFound": 0,
+  "wardsSeeded": 0,
+  "binsSeeded": 0,
+  "samples": [],
+  "limitation": "No identifiable municipal ward polygons returned. No neighborhoods or office points were substituted for wards."
+}

@@ -39,6 +39,15 @@ public class AuthController : ControllerBase
             return BadRequest(ModelState);
         }
 
+        var missing = new List<string>();
+        if (dto.Password.Length < 8) missing.Add("at least 8 characters");
+        if (!System.Text.RegularExpressions.Regex.IsMatch(dto.Password, "[a-z]")) missing.Add("a lowercase letter");
+        if (!System.Text.RegularExpressions.Regex.IsMatch(dto.Password, "[A-Z]")) missing.Add("an uppercase letter");
+        if (!System.Text.RegularExpressions.Regex.IsMatch(dto.Password, "[0-9]")) missing.Add("a number");
+        if (!System.Text.RegularExpressions.Regex.IsMatch(dto.Password, @"[^a-zA-Z0-9\s]")) missing.Add("a special character");
+        if (missing.Count > 0)
+            return BadRequest(new { message = $"Password requires {string.Join(", ", missing)}." });
+
         if (!AllowedRoles.Contains(dto.Role, StringComparer.OrdinalIgnoreCase))
         {
             return BadRequest(new { message = $"Invalid role. Allowed roles are: {string.Join(", ", AllowedRoles)}" });

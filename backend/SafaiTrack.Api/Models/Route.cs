@@ -7,7 +7,7 @@ public class Route
     public string Algorithm { get; set; } = string.Empty;
     public double TotalDistanceKm { get; set; }
     public double? NaiveDistanceKm { get; set; }
-    public string Status { get; set; } = "Planned"; // "Planned", "InProgress", "Completed"
+    public string Status { get; set; } = "Planned"; // "Pending", "AwaitingAcceptance", legacy "Planned", "InProgress", "Completed"
     public int? TruckId { get; set; }
     public string? DriverId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

@@ -25,9 +25,9 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
     options.Password.RequireDigit = true;
     options.Password.RequireLowercase = true;
-    options.Password.RequireUppercase = false;
-    options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequiredLength = 6;
+    options.Password.RequireUppercase = true;
+    options.Password.RequireNonAlphanumeric = true;
+    options.Password.RequiredLength = 8;
     options.User.RequireUniqueEmail = true;
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -63,6 +63,10 @@ builder.Services.AddAuthorization();
 // 4. Register custom application services
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IRouteOptimizerService, RouteOptimizerService>();
+builder.Services.AddHostedService<BinFillSimulationService>();
+builder.Services.AddHostedService<AutomaticRouteService>();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<RoadRoutingService>();
 
 // 5. Configure CORS allowing frontend dev origin (http://localhost:3000) with credentials
 builder.Services.AddCors(options =>

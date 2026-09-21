@@ -2,6 +2,12 @@ using System.ComponentModel.DataAnnotations;
 
 namespace SafaiTrack.Api.Dtos;
 
+public class AssignRouteDto
+{
+    [Required] public string DriverId { get; set; } = string.Empty;
+    public int TruckId { get; set; }
+}
+
 public class GenerateRouteDto
 {
     [Required]

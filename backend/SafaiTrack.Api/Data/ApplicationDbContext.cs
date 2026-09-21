@@ -19,10 +19,20 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Route> Routes => Set<Route>();
     public DbSet<RouteStop> RouteStops => Set<RouteStop>();
     public DbSet<ComplaintUpdate> ComplaintUpdates => Set<ComplaintUpdate>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.Entity<Notification>(entity =>
+        {
+            entity.Property(n => n.Message).IsRequired().HasMaxLength(1000);
+            entity.HasOne(n => n.User).WithMany().HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(n => n.RelatedComplaint).WithMany().HasForeignKey(n => n.RelatedComplaintId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(n => new { n.UserId, n.CreatedAt });
+        });
         builder.Entity<ApplicationUser>().HasOne(u => u.Ward).WithMany()
             .HasForeignKey(u => u.WardId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<ComplaintUpdate>().HasOne(u => u.Complaint).WithMany()

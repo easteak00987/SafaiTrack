@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import {
   Link,
   Navigate,
@@ -24,6 +24,7 @@ import {
 import { useAuth } from "./contexts/AuthContext";
 import { apiClient, apiError } from "./lib/api-client";
 import CollectionMap, { type MapStop } from "./components/CollectionMap";
+import { NotificationAction } from "./components/HeaderActions";
 import Login from "./components/AuthPage";
 import "./workspace.css";
 
@@ -77,7 +78,7 @@ const when = (date: string) =>
 function Status({ value }: { value: string }) {
   return (
     <span className={`ws-status ${value.toLowerCase()}`}>
-      {value === "InProgress" ? "In progress" : value}
+      {value === "InProgress" ? "In progress" : value === "AwaitingAcceptance" ? "Awaiting acceptance" : value}
     </span>
   );
 }
@@ -118,7 +119,8 @@ function useData<T>(path: string | null) {
   return { data, error, loading, reload };
 }
 function Guard({ roles }: { roles?: string[] }) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, initializing } = useAuth();
+  if (initializing) return <p role="status">Restoring session...</p>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user!.role))
     return <Navigate to={home(user!.role)} replace />;
@@ -192,6 +194,7 @@ function Shell() {
         <header className="ws-top">
           <span>{roleNames[user!.role]} workspace</span>
           <span>Dhaka municipal services</span>
+          <NotificationAction currentUserRole={roleNames[user!.role] as "Citizen" | "Truck Driver" | "Ward Officer" | "City Admin"} />
         </header>
         <div className="ws-content">
           <Outlet />
@@ -345,7 +348,7 @@ function Dashboard() {
             : "Recent ward complaints"}
       </h2>
       {driver ? (
-        <RouteRows rows={rows as CollectionRoute[]} driver />
+        <DriverRoutes rows={rows as CollectionRoute[]} reload={resource.reload} />
       ) : (
         <ComplaintRows
           rows={(rows as Complaint[]).slice(0, 8)}
@@ -449,6 +452,7 @@ function Complaints() {
 }
 function ComplaintDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const resource = useData<Complaint>(`/api/complaints/${id}`);
   const history = useData<
@@ -712,6 +716,31 @@ function RouteRows({
     <p className="ws-empty">No assigned routes yet.</p>
   );
 }
+function DriverRoutes({ rows, reload }: { rows: CollectionRoute[]; reload: () => Promise<void> }) {
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const awaiting = rows.filter(r => r.status === "AwaitingAcceptance" || r.status === "Planned");
+  const respond = async (id: number, decision: string) => {
+    setBusy(true); setError("");
+    try { await apiClient.put(`/api/routes/${id}/${decision}`); await reload(); }
+    catch (e) { setError(apiError(e)); }
+    finally { setBusy(false); }
+  };
+  return <>
+    <ErrorBox message={error} />
+    {awaiting.length > 0 && <><h2>Awaiting acceptance</h2>
+      {awaiting.map(r => <div key={r.routeId}>
+        <RouteRows rows={[r]} driver />
+        <div className="ws-actions">
+          <button disabled={busy} className="primary" onClick={() => respond(r.routeId, "accept")}>Accept</button>
+          <button disabled={busy} onClick={() => respond(r.routeId, "decline")}>Decline</button>
+        </div>
+      </div>)}
+    </>}
+    <h2>In progress and completed</h2>
+    <RouteRows rows={rows.filter(r => !awaiting.includes(r))} driver />
+  </>;
+}
 function RouteList() {
   const { user } = useAuth();
   const driver = user?.role === "Driver";
@@ -729,16 +758,16 @@ function RouteList() {
       {resource.loading ? (
         <p>Loading routes...</p>
       ) : (
-        <RouteRows rows={resource.data || []} driver={driver} />
+        driver ? <DriverRoutes rows={resource.data || []} reload={resource.reload} /> : <RouteRows rows={resource.data || []} />
       )}
     </>
   );
 }
-function Dispatch({ onDispatch }: { onDispatch: () => void }) {
+function Dispatch({ onDispatch, pending }: { onDispatch: () => void; pending?: CollectionRoute }) {
   const wards = useData<Ward[]>("/api/workspace/wards"),
     drivers = useData<Driver[]>("/api/workspace/drivers"),
     trucks = useData<Vehicle[]>("/api/trucks");
-  const [ward, setWard] = useState(""),
+  const [ward, setWard] = useState(pending ? String(pending.wardId) : ""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const navigate = useNavigate();
@@ -751,12 +780,15 @@ function Dispatch({ onDispatch }: { onDispatch: () => void }) {
         setBusy(true);
         setError("");
         try {
-          const { data } = await apiClient.post("/api/routes/generate", {
+          const payload = {
             wardId: Number(ward),
             driverId: form.get("driver"),
             truckId: Number(form.get("truck")),
             algorithm: form.get("algorithm"),
-          });
+          };
+          const { data } = pending
+            ? await apiClient.put(`/api/routes/${pending.routeId}/assign`, payload)
+            : await apiClient.post("/api/routes/generate", payload);
           onDispatch();
           navigate(`/operations/routes/${data.routeId}`);
         } catch (err) {
@@ -766,7 +798,7 @@ function Dispatch({ onDispatch }: { onDispatch: () => void }) {
         }
       }}
     >
-      <h2>Assign collection work</h2>
+      <h2>{pending ? "Assign pending route" : "Assign collection work"}</h2>
       <ErrorBox
         message={error || wards.error || drivers.error || trucks.error}
         retry={() => {
@@ -780,6 +812,7 @@ function Dispatch({ onDispatch }: { onDispatch: () => void }) {
           Ward
           <select
             aria-label="Ward"
+            disabled={!!pending}
             required
             value={ward}
             onChange={e => setWard(e.target.value)}
@@ -834,27 +867,36 @@ function Dispatch({ onDispatch }: { onDispatch: () => void }) {
       </div>
       <button className="primary" disabled={busy}>
         <Navigation size={17} />
-        {busy ? "Generating..." : "Generate & assign route"}
+        {busy ? "Saving..." : pending ? "Assign route" : "Generate & assign route"}
       </button>
     </form>
   );
 }
 function RouteDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const resource = useData<CollectionRoute>(`/api/routes/${id}`);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const route = resource.data;
-  const action = async (suffix: string) => {
+  const actionBusy = useRef(false);
+  const action = async (suffix: string): Promise<boolean> => {
+    if (actionBusy.current) return false;
+    actionBusy.current = true;
     setBusy(true);
     setError("");
     try {
       await apiClient.put(`/api/routes/${id}/${suffix}`);
-      await resource.reload();
+      if (suffix === "decline") navigate("/driver/route");
+      else await resource.reload();
+      return true;
     } catch (err) {
       setError(apiError(err));
+      await resource.reload();
+      return false;
     } finally {
+      actionBusy.current = false;
       setBusy(false);
     }
   };
@@ -875,22 +917,23 @@ function RouteDetail() {
           <RefreshCw size={16} />
           Refresh
         </button>
-        {route.status === "Planned" && (
+        {["Planned", "Pending", "AwaitingAcceptance"].includes(route.status) && (
           <button disabled={busy} onClick={() => action("optimize")}>
             <RefreshCw size={16} />
             Optimize stops
           </button>
         )}
-        {driver && route.status === "Planned" && (
+        {driver && ["Planned", "AwaitingAcceptance"].includes(route.status) && (
           <button
             className="primary"
             disabled={busy}
-            onClick={() => action("start")}
+            onClick={() => action("accept")}
           >
             <Navigation size={16} />
-            Start route
+            Accept route
           </button>
         )}
+        {driver && ["Planned", "AwaitingAcceptance"].includes(route.status) && <button disabled={busy} onClick={() => action("decline")}>Decline route</button>}
         {driver && route.status === "InProgress" && !next && (
           <button
             className="primary"
@@ -911,7 +954,12 @@ function RouteDetail() {
         Estimated straight-line distance: {route.totalDistanceKm.toFixed(2)} km.
       </p>
       <ErrorBox message={error || resource.error} />
-      <CollectionMap stops={route.stops} route />
+      {!driver && route.status === "Pending" && <Dispatch pending={route} onDispatch={resource.reload} />}
+      <CollectionMap stops={route.stops} route routeId={route.routeId} motion={driver ? {
+        routeId: route.routeId, active: route.status === "InProgress",
+        collect: index => action(`stops/${route.stops[index].routeStopId}/collect`),
+        complete: () => action("complete"),
+      } : undefined} />
       <h2>Collection order</h2>
       <div className="ws-list">
         {route.stops.map((s, index) => (

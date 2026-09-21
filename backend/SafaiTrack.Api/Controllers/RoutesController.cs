@@ -14,7 +14,7 @@ namespace SafaiTrack.Api.Controllers;
 [Authorize(Roles = "Admin,WardOfficer,Driver")]
 [ApiController]
 [Route("api/routes")]
-public class RoutesController(ApplicationDbContext db, IRouteOptimizerService optimizer) : ControllerBase
+public class RoutesController(ApplicationDbContext db, IRouteOptimizerService optimizer, RoadRoutingService roads) : ControllerBase
 {
     private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     private async Task<IQueryable<Route>> ScopedRoutes()
@@ -61,6 +61,39 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
         return route == null ? NotFound() : Ok(Summary(route));
     }
     [Authorize(Roles = "Admin,WardOfficer")]
+    [HttpPut("{id:int}/assign")]
+    public async Task<IActionResult> Assign(int id, AssignRouteDto dto)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var route = await Details(await ScopedRoutes()).FirstOrDefaultAsync(r => r.RouteId == id);
+        if (route == null) return NotFound();
+        if (route.Status != "Pending" || route.DriverId != null || route.TruckId != null)
+            return Conflict(new { message = "Only an unassigned pending route can be assigned." });
+        var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == dto.DriverId && u.Role == "Driver" && u.WardId == route.WardId);
+        var truck = await db.Trucks.FindAsync(dto.TruckId);
+        if (driver == null || truck == null || truck.Status != "Available")
+            return BadRequest(new { message = "Select a ward driver and available truck." });
+        if (await db.Routes.AnyAsync(r => r.RouteId != id && r.Status != "Completed" && (r.DriverId == dto.DriverId || r.TruckId == dto.TruckId)))
+            return Conflict(new { message = "This driver or truck already has an unfinished route." });
+        route.DriverId = driver.Id; route.TruckId = truck.TruckId; route.Status = "AwaitingAcceptance";
+        await db.SaveChangesAsync(); await tx.CommitAsync();
+        return Ok(Summary(route));
+    }
+
+    [HttpGet("{id:int}/road")]
+    public async Task<IActionResult> Road(int id, CancellationToken ct)
+    {
+        var route = await Details(await ScopedRoutes()).AsNoTracking().FirstOrDefaultAsync(r => r.RouteId == id, ct);
+        if (route == null) return NotFound();
+        if (route.RouteStops.Count == 0) return BadRequest(new { message = "This route has no stops." });
+        var points = new List<(double Latitude, double Longitude)> { (RouteOptimizerService.DefaultDepot.lat, RouteOptimizerService.DefaultDepot.lon) };
+        points.AddRange(route.RouteStops.OrderBy(s => s.StopSequence).Select(s => (s.Bin!.Latitude, s.Bin.Longitude)));
+        try { return Ok(await roads.GetAsync(points, ct)); }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        { return StatusCode(503, new { message = "Road directions unavailable. Manual collection remains available." }); }
+    }
+
+    [Authorize(Roles = "Admin,WardOfficer")]
     [HttpPost("generate")]
     public async Task<IActionResult> Generate(GenerateRouteDto dto)
     {
@@ -80,10 +113,14 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
             .OrderBy(b => b.BinId).ToListAsync();
         if (bins.Count == 0) return BadRequest(new { message = "No unassigned bins need collection in this ward." });
         var result = dto.Algorithm == "nearest_neighbor" ? optimizer.ComputeNearestNeighborRoute(bins) : optimizer.ComputeDijkstraRoute(bins);
-        var route = new Route { WardId = dto.WardId, DriverId = driver.Id, TruckId = truck.TruckId,
-            Algorithm = result.Algorithm, TotalDistanceKm = result.TotalDistanceKm, NaiveDistanceKm = result.NaiveDistanceKm,
-            RouteStops = result.OrderedStops.Select(s => new RouteStop { BinId = s.BinId, StopSequence = s.StopSequence }).ToList() };
-        db.Routes.Add(route);
+        var pending = await db.Routes.Include(r => r.RouteStops).FirstOrDefaultAsync(r => r.WardId == dto.WardId && r.Status == "Pending" && r.DriverId == null);
+        var route = pending ?? new Route { WardId = dto.WardId };
+        if (pending != null) db.RouteStops.RemoveRange(pending.RouteStops);
+        route.DriverId = driver.Id; route.TruckId = truck.TruckId; route.Status = "AwaitingAcceptance";
+        route.Algorithm = result.Algorithm; route.TotalDistanceKm = result.TotalDistanceKm;
+        route.NaiveDistanceKm = result.NaiveDistanceKm;
+        route.RouteStops = result.OrderedStops.Select(s => new RouteStop { BinId = s.BinId, StopSequence = s.StopSequence }).ToList();
+        if (pending == null) db.Routes.Add(route);
         await db.SaveChangesAsync();
         await tx.CommitAsync();
         return CreatedAtAction(nameof(GetRoute), new { id = route.RouteId }, new { route.RouteId });
@@ -94,7 +131,7 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var route = await Details(await ScopedRoutes()).FirstOrDefaultAsync(r => r.RouteId == id);
         if (route == null) return NotFound();
-        if (route.Status != "Planned") return Conflict(new { message = "Only a planned route can be optimized." });
+        if (route.Status != "Planned" && route.Status != "Pending" && route.Status != "AwaitingAcceptance") return Conflict(new { message = "Only a planned route can be optimized." });
         var result = optimizer.ComputeDijkstraRoute(route.RouteStops.Select(s => s.Bin!).ToList());
         foreach (var stop in route.RouteStops) stop.StopSequence = result.OrderedStops.Single(s => s.BinId == stop.BinId).StopSequence;
         route.Algorithm = result.Algorithm;
@@ -106,18 +143,32 @@ public class RoutesController(ApplicationDbContext db, IRouteOptimizerService op
     }
     [Authorize(Roles = "Driver")]
     [HttpPut("{id:int}/start")]
+    [HttpPut("{id:int}/accept")]
     public async Task<IActionResult> Start(int id)
     {
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var route = await Details(await ScopedRoutes()).FirstOrDefaultAsync(r => r.RouteId == id);
         if (route == null) return NotFound();
-        if (route.Status != "Planned" || route.Truck?.Status != "Available" || route.RouteStops.Count == 0)
+        if ((route.Status != "Planned" && route.Status != "AwaitingAcceptance") || route.Truck?.Status != "Available" || route.RouteStops.Count == 0)
             return Conflict(new { message = "This route is not ready to start." });
         route.Status = "InProgress";
         route.Truck.Status = "OnRoute";
         await db.SaveChangesAsync();
         await tx.CommitAsync();
         return Ok(Summary(route));
+    }
+    [Authorize(Roles = "Driver")]
+    [HttpPut("{id:int}/decline")]
+    public async Task<IActionResult> Decline(int id)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var route = await Details(await ScopedRoutes()).FirstOrDefaultAsync(r => r.RouteId == id);
+        if (route == null) return NotFound();
+        if (route.Status != "AwaitingAcceptance" && route.Status != "Planned")
+            return Conflict(new { message = "Only a route awaiting acceptance can be declined." });
+        route.DriverId = null; route.TruckId = null; route.Status = "Pending";
+        await db.SaveChangesAsync(); await tx.CommitAsync();
+        return NoContent();
     }
     [Authorize(Roles = "Driver")]
     [HttpPut("{id:int}/stops/{stopId:int}/collect")]
