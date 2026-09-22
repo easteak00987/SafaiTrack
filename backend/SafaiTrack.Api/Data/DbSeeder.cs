@@ -330,10 +330,25 @@ public static class DbSeeder
         // 7. Citizens
         var citizens = new List<CitizenDefinition>
         {
-            new("citizen@safaitrack.local", "Tanvir Hossain", "Male", "+8801991000101", "Dhanmondi"),
-            new("citizen01@safaitrack.local", "Nusrat Jahan", "Female", "+8801991000102", "Gulshan"),
-            new("citizen02@safaitrack.local", "Sadia Afrin", "Female", "+8801991000103", "Mirpur"),
-            new("easteak00987@gmail.com", "Easteak Ahmed", "Male", "+8801991000166", "Dhanmondi")
+            // Core test accounts
+            new("citizen@safaitrack.local",          "Tanvir Hossain",       "Male",   "+8801991000101", "Dhanmondi"),
+            new("citizen01@safaitrack.local",        "Nusrat Jahan",         "Female", "+8801991000102", "Gulshan"),
+            new("citizen02@safaitrack.local",        "Sadia Afrin",          "Female", "+8801991000103", "Mirpur"),
+            // Team member accounts (active)
+            new("easteak00987@gmail.com",            "Easteak Ahmed",        "Male",   "+8801991000166", "Dhanmondi"),
+            new("fairuzanadi@gmail.com",             "Fairuz Anadi",         "Female", "+8801991000167", "Gulshan"),
+            new("saleh.sami@gmail.com",              "Saleh Mahmud Sami",    "Male",   "+8801991000168", "Uttara West"),
+            // Additional realistic citizens across multiple wards
+            new("rahim.uddin@safaitrack.local",      "Abdur Rahim Uddin",    "Male",   "+8801991000201", "Banani"),
+            new("fatema.khatun@safaitrack.local",    "Fatema Khatun",        "Female", "+8801991000202", "Rampura"),
+            new("shaheen.alam@safaitrack.local",     "Shaheen Alam",         "Male",   "+8801991000203", "Mohammadpur"),
+            new("rehana.begum@safaitrack.local",     "Rehana Begum",         "Female", "+8801991000204", "Kafrul"),
+            new("imran.hossain@safaitrack.local",    "Imran Hossain",        "Male",   "+8801991000205", "Uttara East"),
+            new("sharmin.sultana@safaitrack.local",  "Sharmin Sultana",      "Female", "+8801991000206", "Tejgaon"),
+            new("monir.uddin@safaitrack.local",      "Monir Uddin",          "Male",   "+8801991000207", "Khilgaon"),
+            new("beauty.begum@safaitrack.local",     "Beauty Begum",         "Female", "+8801991000208", "Lalbagh"),
+            new("arif.hasan@safaitrack.local",       "Arif Hasan",           "Male",   "+8801991000209", "Hatirjheel"),
+            new("kohinoor.akter@safaitrack.local",   "Kohinoor Akter",       "Female", "+8801991000210", "Sabujbagh"),
         };
 
         foreach (var c in citizens)
@@ -388,45 +403,107 @@ public static class DbSeeder
             }
         }
 
-        // 8. New Pending Approval Accounts for Admin Approvals Testing
-        var pendingAccounts = new[]
+        // 8. Pending Approval Accounts — realistic queue for admin dashboard
+        // These accounts simulate citizens, drivers, and officers waiting for admin approval.
+        // Password for all pending accounts: Pass1234!
+        var pendingCitizens = new[]
         {
-            new { Email = "mahir.citizen@safaitrack.local", FullName = "Mahir Faysal", Gender = "Male", Phone = "+8801912345001", Role = "Citizen", Ward = "Dhanmondi" },
-            new { Email = "rafiq.driver@safaitrack.local", FullName = "Rafiqul Islam Babul", Gender = "Male", Phone = "+8801712345002", Role = "Driver", Ward = "" },
-            new { Email = "nusrat.officer@safaitrack.local", FullName = "Nusrat Jahan Chowdhury", Gender = "Female", Phone = "+8801812345003", Role = "WardOfficer", Ward = "Dhanmondi" }
+            new { Email = "mahir.citizen@safaitrack.local",    FullName = "Mahir Faysal",           Gender = "Male",   Phone = "+8801912345001", Ward = "Dhanmondi" },
+            new { Email = "tahmina.pending@safaitrack.local",  FullName = "Tahmina Akter",          Gender = "Female", Phone = "+8801912345004", Ward = "Gulshan" },
+            new { Email = "sabbir.pending@safaitrack.local",   FullName = "Sabbir Ahmed",           Gender = "Male",   Phone = "+8801912345005", Ward = "Mirpur" },
+            new { Email = "ruma.pending@safaitrack.local",     FullName = "Ruma Begum",             Gender = "Female", Phone = "+8801912345006", Ward = "Uttara West" },
+            new { Email = "jahid.pending@safaitrack.local",    FullName = "Jahidul Islam",          Gender = "Male",   Phone = "+8801912345007", Ward = "Banani" },
+            new { Email = "mitu.pending@safaitrack.local",     FullName = "Mitu Khanam",            Gender = "Female", Phone = "+8801912345008", Ward = "Rampura" },
+            new { Email = "ashik.pending@safaitrack.local",    FullName = "Ashikur Rahman",         Gender = "Male",   Phone = "+8801912345009", Ward = "Mohammadpur" },
+            new { Email = "popy.pending@safaitrack.local",     FullName = "Popy Akter",             Gender = "Female", Phone = "+8801912345010", Ward = "Khilgaon" },
         };
 
-        foreach (var p in pendingAccounts)
+        foreach (var p in pendingCitizens)
         {
+            var assignedWard = FindWardByKeyword(p.Ward);
             var user = await userManager.FindByEmailAsync(p.Email);
-            var assignedWard = !string.IsNullOrEmpty(p.Ward) ? FindWardByKeyword(p.Ward) : null;
             if (user == null)
             {
                 user = new ApplicationUser
                 {
-                    UserName = p.Email,
-                    Email = p.Email,
-                    FullName = p.FullName,
-                    Gender = p.Gender,
-                    PhoneNumber = p.Phone,
-                    Role = p.Role,
-                    Status = "PendingApproval",
-                    WardId = null,
-                    RequestedWardId = (p.Role == "Citizen" || p.Role == "WardOfficer") ? assignedWard?.WardId : null,
+                    UserName = p.Email, Email = p.Email, FullName = p.FullName,
+                    Gender = p.Gender, PhoneNumber = p.Phone,
+                    Role = "Citizen", Status = "PendingApproval",
+                    WardId = null, RequestedWardId = assignedWard?.WardId,
                     EmailConfirmed = false
                 };
                 await userManager.CreateAsync(user, "Pass1234!");
-                await userManager.AddToRoleAsync(user, p.Role);
+                await userManager.AddToRoleAsync(user, "Citizen");
             }
             else
             {
-                if (p.Role == "Citizen")
+                user.Status = "PendingApproval";
+                user.WardId = null;
+                user.RequestedWardId ??= assignedWard?.WardId;
+                await userManager.UpdateAsync(user);
+            }
+        }
+
+        var pendingDrivers = new[]
+        {
+            new { Email = "rafiq.driver@safaitrack.local",    FullName = "Rafiqul Islam Babul",    Gender = "Male", Phone = "+8801712345002" },
+            new { Email = "rubel.driver@safaitrack.local",    FullName = "Rubel Hossain",          Gender = "Male", Phone = "+8801712345011" },
+            new { Email = "sohel.driver@safaitrack.local",    FullName = "Sohel Rana",             Gender = "Male", Phone = "+8801712345012" },
+            new { Email = "hannan.driver@safaitrack.local",   FullName = "Abdur Hannan Mia",       Gender = "Male", Phone = "+8801712345013" },
+        };
+
+        foreach (var d in pendingDrivers)
+        {
+            var user = await userManager.FindByEmailAsync(d.Email);
+            if (user == null)
+            {
+                user = new ApplicationUser
                 {
-                    user.RequestedWardId = assignedWard?.WardId;
-                    user.WardId = null;
-                    user.Status = "PendingApproval";
-                    await userManager.UpdateAsync(user);
-                }
+                    UserName = d.Email, Email = d.Email, FullName = d.FullName,
+                    Gender = d.Gender, PhoneNumber = d.Phone,
+                    Role = "Driver", Status = "PendingApproval",
+                    WardId = null, RequestedWardId = null,
+                    EmailConfirmed = false
+                };
+                await userManager.CreateAsync(user, "Pass1234!");
+                await userManager.AddToRoleAsync(user, "Driver");
+            }
+            else
+            {
+                user.Status = "PendingApproval";
+                await userManager.UpdateAsync(user);
+            }
+        }
+
+        var pendingOfficers = new[]
+        {
+            new { Email = "nusrat.officer@safaitrack.local",  FullName = "Nusrat Jahan Chowdhury", Gender = "Female", Phone = "+8801812345003", Ward = "Dhanmondi" },
+            new { Email = "karim.officer@safaitrack.local",   FullName = "Karim Hossain",          Gender = "Male",   Phone = "+8801812345014", Ward = "Gulshan" },
+            new { Email = "sumaiya.officer@safaitrack.local", FullName = "Sumaiya Akter",          Gender = "Female", Phone = "+8801812345015", Ward = "Mirpur" },
+        };
+
+        foreach (var o in pendingOfficers)
+        {
+            var assignedWard = FindWardByKeyword(o.Ward);
+            var user = await userManager.FindByEmailAsync(o.Email);
+            if (user == null)
+            {
+                user = new ApplicationUser
+                {
+                    UserName = o.Email, Email = o.Email, FullName = o.FullName,
+                    Gender = o.Gender, PhoneNumber = o.Phone,
+                    Role = "WardOfficer", Status = "PendingApproval",
+                    WardId = null, RequestedWardId = assignedWard?.WardId,
+                    EmailConfirmed = false
+                };
+                await userManager.CreateAsync(user, "Pass1234!");
+                await userManager.AddToRoleAsync(user, "WardOfficer");
+            }
+            else
+            {
+                user.Status = "PendingApproval";
+                user.RequestedWardId ??= assignedWard?.WardId;
+                await userManager.UpdateAsync(user);
             }
         }
 
