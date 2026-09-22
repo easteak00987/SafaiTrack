@@ -204,8 +204,8 @@ public class InvoicesController : ControllerBase
         {
             created,
             message = created == 0
-                ? "Every eligible household is already billed for the current period."
-                : $"Issued {created} collection-fee invoice(s) for the current period."
+                ? "Every eligible household already has a bill or proposal for the current period."
+                : $"Prepared {created} billing proposal(s). Send them from Payments & wages."
         });
     }
 

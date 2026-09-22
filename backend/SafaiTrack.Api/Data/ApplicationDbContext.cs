@@ -23,20 +23,58 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Payment> Payments => Set<Payment>();
 
+    public DbSet<BillingDraft> BillingDrafts => Set<BillingDraft>();
+    public DbSet<DriverWage> DriverWages => Set<DriverWage>();
+    public DbSet<WageContribution> WageContributions => Set<WageContribution>();
+    public DbSet<RouteActivity> RouteActivities => Set<RouteActivity>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.Entity<BillingDraft>(e => {
+            e.HasIndex(x => new { x.CitizenId, x.PeriodStart }).IsUnique();
+            e.Property(x => x.Amount).HasPrecision(18, 2);
+            e.HasOne(x => x.Citizen).WithMany().HasForeignKey(x => x.CitizenId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Ward).WithMany().HasForeignKey(x => x.WardId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Invoice).WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<DriverWage>(e => {
+            e.HasIndex(x => new { x.DriverId, x.PeriodStart }).IsUnique();
+            e.HasOne(x => x.Driver).WithMany().HasForeignKey(x => x.DriverId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.BaseAmount).HasPrecision(18, 2);
+            e.Property(x => x.PerBinAmount).HasPrecision(18, 2);
+            e.Property(x => x.BonusRate).HasPrecision(5, 4);
+            e.Property(x => x.BonusAmount).HasPrecision(18, 2);
+            e.Property(x => x.Amount).HasPrecision(18, 2);
+        });
+        builder.Entity<WageContribution>(e => {
+            e.HasIndex(x => x.RouteId).IsUnique();
+            e.HasOne(x => x.Route).WithMany().HasForeignKey(x => x.RouteId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.DriverWage).WithMany(x => x.Contributions).HasForeignKey(x => x.DriverWageId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<RouteActivity>(e => {
+            e.HasIndex(x => new { x.ActorId, x.CreatedAt });
+            e.HasOne(x => x.Actor).WithMany().HasForeignKey(x => x.ActorId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Route).WithMany().HasForeignKey(x => x.RouteId).OnDelete(DeleteBehavior.Restrict);
+        });
         builder.Entity<Notification>(entity =>
         {
+            entity.Property(n => n.Title).HasMaxLength(200);
             entity.Property(n => n.Message).IsRequired().HasMaxLength(1000);
+            entity.Property(n => n.Category).HasMaxLength(50);
+            entity.Property(n => n.Link).HasMaxLength(300);
             entity.HasOne(n => n.User).WithMany().HasForeignKey(n => n.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(n => n.RelatedComplaint).WithMany().HasForeignKey(n => n.RelatedComplaintId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(n => n.RelatedRoute).WithMany().HasForeignKey(n => n.RelatedRouteId)
                 .OnDelete(DeleteBehavior.SetNull);
             entity.HasIndex(n => new { n.UserId, n.CreatedAt });
         });
         builder.Entity<ApplicationUser>().HasOne(u => u.Ward).WithMany()
             .HasForeignKey(u => u.WardId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<ApplicationUser>().HasOne(u => u.RequestedWard).WithMany()
+            .HasForeignKey(u => u.RequestedWardId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<ComplaintUpdate>().HasOne(u => u.Complaint).WithMany()
             .HasForeignKey(u => u.ComplaintId).OnDelete(DeleteBehavior.Cascade);
         builder.Entity<ComplaintUpdate>().Property(u => u.Message).HasMaxLength(1000);

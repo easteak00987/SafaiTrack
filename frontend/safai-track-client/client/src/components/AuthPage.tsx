@@ -11,6 +11,7 @@ import {
   Key,
   Lock,
   Mail,
+  Phone,
   Shield,
   Sparkles,
   Truck,
@@ -26,6 +27,12 @@ const ROLE_PRESETS: Record<UserRole, { backendRole: string }> = {
   "Citizen": { backendRole: "Citizen" },
   "City Admin": { backendRole: "Admin" },
 };
+
+export function isValidBdPhone(phone: string): boolean {
+  const cleaned = phone.trim().replace(/[\s-]/g, "");
+  return /^(\+?8801|01)[3-9]\d{8}$/.test(cleaned);
+}
+
 export function missingPasswordRequirements(password: string): string[] {
   return [
     password.length < 8 && "at least 8 characters",
@@ -36,32 +43,64 @@ export function missingPasswordRequirements(password: string): string[] {
   ].filter((requirement): requirement is string => typeof requirement === "string");
 }
 
-export default function AuthPage({ register = false }: { register?: boolean }) {
-  const { login, isAuthenticated, initializing } = useAuth();
+export default function AuthPage({ register = false, cityAdmin = false }: { register?: boolean; cityAdmin?: boolean }) {
+  const { user, login, isAuthenticated, initializing } = useAuth();
   const navigate = useNavigate();
 
   const [role, setRole] = useState<UserRole>(() => {
     const stored = (typeof localStorage !== "undefined" ? localStorage.getItem("safaitrack_active_role") : null) as UserRole | null;
-    return stored && ROLE_PRESETS[stored] ? stored : "Citizen";
+    return cityAdmin ? "City Admin" : stored && stored !== "City Admin" && ROLE_PRESETS[stored] ? stored : "Citizen";
   });
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [gender, setGender] = useState<"Male" | "Female" | "Other">("Male");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const [genderDropdownOpen, setGenderDropdownOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [wards, setWards] = useState<{ wardId: number; name: string }[]>([]);
+  const [requestedWardId, setRequestedWardId] = useState<number | "">("");
+  const [pendingSuccess, setPendingSuccess] = useState("");
   const roleDropdownRef = useRef<HTMLDivElement>(null);
+  const genderDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (register) {
+      apiClient.get<{ wardId: number; name: string }[]>("/api/workspace/wards")
+        .then(res => setWards(res.data))
+        .catch(() => {});
+    }
+  }, [register]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (roleDropdownRef.current && !roleDropdownRef.current.contains(e.target as Node)) {
         setRoleDropdownOpen(false);
       }
+      if (genderDropdownRef.current && !genderDropdownRef.current.contains(e.target as Node)) {
+        setGenderDropdownOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotStep, setForgotStep] = useState<"email" | "token">("email");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [generatedToken, setGeneratedToken] = useState("");
+  const [forgotBusy, setForgotBusy] = useState(false);
+  const [forgotError, setForgotError] = useState("");
+  const [forgotSuccess, setForgotSuccess] = useState("");
+
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [googleEmailInput, setGoogleEmailInput] = useState("");
+  const [googleNameInput, setGoogleNameInput] = useState("");
 
   const handleSelectRole = (newRole: UserRole) => {
     setRole(newRole);
@@ -69,9 +108,67 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
     setError("");
   };
 
+  const handleGoogleSignIn = async () => {
+    setError("");
+
+    // Open official Google Accounts Window in browser without invalid client params
+    try {
+      window.open(
+        "https://accounts.google.com/AccountChooser",
+        "GoogleSignIn",
+        "width=520,height=600,top=100,left=100"
+      );
+    } catch {
+      /* Popup window fallback */
+    }
+
+    // Pre-fill Google email
+    setGoogleEmailInput(email || "fairuzanadi@gmail.com");
+    if (name) setGoogleNameInput(name);
+    setShowGoogleModal(true);
+  };
+
+  const submitGoogleAuth = async (gEmail: string, gName?: string) => {
+    if (!gEmail || !gEmail.includes("@")) {
+      setError("Please enter a valid Gmail address.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      const backendRole = ROLE_PRESETS[role].backendRole;
+      const { data } = await apiClient.post("/api/auth/google", {
+        email: gEmail.trim(),
+        name: (gName || gEmail.split("@")[0]).trim(),
+        role: backendRole,
+      });
+
+      if (data.status === "PendingApproval") {
+        setPendingSuccess(data.message || "Your registration has been submitted and is pending admin approval.");
+        setShowGoogleModal(false);
+        return;
+      }
+
+      login(data.token, {
+        fullName: data.fullName,
+        email: gEmail.trim(),
+        role: data.role,
+      });
+      localStorage.setItem("safaitrack_active_role", role);
+      setShowGoogleModal(false);
+      navigate("/home", { replace: true });
+    } catch (err) {
+      setError(apiError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const missingRequirements = missingPasswordRequirements(password);
   if (initializing) return <p role="status">Restoring session...</p>;
-  if (isAuthenticated) return <Navigate to="/home" replace />;
+  if (isAuthenticated && (!cityAdmin || user?.role === "Admin")) return <Navigate to="/home" replace />;
+
 
   const ease = [0.16, 1, 0.3, 1] as const;
 
@@ -155,21 +252,43 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
               setError(`Password requires ${missingRequirements.join(", ")}.`);
               return;
             }
+            if (register && !isValidBdPhone(phone)) {
+              setError("Please enter a valid Bangladeshi mobile number (e.g. +8801991000166 or 01991000166).");
+              return;
+            }
+            const backendRole = ROLE_PRESETS[role].backendRole;
+            if (register && (backendRole === "WardOfficer" || backendRole === "Citizen") && !requestedWardId) {
+              setError("Which ward are you applying for? Please select a ward.");
+              return;
+            }
             setBusy(true);
             setError("");
             try {
               const emailToUse = email.trim();
-              const backendRole = ROLE_PRESETS[role].backendRole;
               const { data } = await apiClient.post(
-                `/api/auth/${register ? "register" : "login"}`,
+                `/api/auth/${register ? "register" : cityAdmin ? "city-admin/login" : "login"}`,
                 {
                   email: emailToUse,
                   password,
                   ...(register
-                    ? { fullName: name.trim(), role: backendRole }
+                    ? {
+                        fullName: name.trim(),
+                        phoneNumber: phone.trim(),
+                        gender,
+                        role: backendRole,
+                        ...(backendRole === "WardOfficer"
+                          ? { requestedWardId: Number(requestedWardId) }
+                          : backendRole === "Citizen"
+                          ? { requestedWardId: Number(requestedWardId), wardId: Number(requestedWardId) }
+                          : {}),
+                      }
                     : {}),
                 }
               );
+              if (register && data.status === "PendingApproval") {
+                setPendingSuccess(data.message || "Your registration has been submitted and is pending admin approval.");
+                return;
+              }
               login(data.token, {
                 fullName: data.fullName,
                 email: emailToUse,
@@ -194,197 +313,705 @@ export default function AuthPage({ register = false }: { register?: boolean }) {
           </div>
           <div>
             <h2>
-              {register ? "Join the response layer." : "Welcome back."}
+              {cityAdmin ? "City Admin" : register ? "Join the response layer." : "Welcome back."}
               <br />
               <span className="purpose-highlight">Move with purpose.</span>
             </h2>
             <p className="auth-subtitle">
               {register
                 ? "Choose how you’ll help make civic handoffs visible."
-                : "Sign in to pick up the next useful signal in your ward."}
+                : cityAdmin ? "Sign in to manage city services, approvals and payments." : "Sign in to pick up the next useful signal in your ward."}
             </p>
           </div>
-          <div className="form-fields">
-            {register && (
+
+          {pendingSuccess ? (
+            <div
+              className="auth-success-banner"
+              role="status"
+              style={{
+                color: "#0f5132",
+                background: "#d1e7dd",
+                border: "1px solid #badbcc",
+                borderRadius: 10,
+                padding: "20px 22px",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                marginTop: 12,
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 17, color: "#0a3622" }}>Registration Received!</div>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "#0f5132" }}>{pendingSuccess}</p>
+              <p style={{ margin: 0, fontSize: 13, color: "#146c43" }}>
+                An Administrator will review your credentials and assign your ward before you can sign in.
+              </p>
+              <Link
+                to="/login"
+                className="lime-button full open-access-btn"
+                style={{ textDecoration: "none", marginTop: 8, textAlign: "center" }}
+              >
+                Return to Sign In
+              </Link>
+            </div>
+          ) : (
+            <div className="form-fields">
+              {register && (
+                <div className="field-group">
+                  <label htmlFor="auth-name">Your name</label>
+                  <div className="input-with-icon">
+                    <User size={17} className="field-icon" />
+                    <input
+                      id="auth-name"
+                      name="name"
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      required
+                      maxLength={120}
+                      autoComplete="off"
+                      placeholder="e.g. Kabir Hossain"
+                    />
+                  </div>
+                </div>
+              )}
               <div className="field-group">
-                <label htmlFor="auth-name">Your name</label>
+                <label htmlFor="auth-email">{register ? "Email address" : "Email or Registered Full Name"}</label>
                 <div className="input-with-icon">
-                  <User size={17} className="field-icon" />
+                  <Mail size={17} className="field-icon" />
                   <input
-                    id="auth-name"
-                    name="name"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
+                    id="auth-email"
+                    name="email"
+                    type={register ? "email" : "text"}
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
                     required
-                    maxLength={120}
-                    autoComplete="off"
-                    placeholder="e.g. Kabir Hossain"
+                    autoComplete={register ? "email" : "username"}
+                    placeholder={register ? "you@example.com" : cityAdmin ? "Your City Admin email or name" : "e.g. Karim Driver or driver@safaitrack.local"}
                   />
                 </div>
               </div>
-            )}
-            <div className="field-group">
-              <label htmlFor="auth-email">Email address</label>
-              <div className="input-with-icon">
-                <Mail size={17} className="field-icon" />
-                <input
-                  id="auth-email"
-                  name="email"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
-                  autoComplete="off"
-                  placeholder="you@example.com"
-                />
-              </div>
-            </div>
-            <div className="field-group">
-              <label htmlFor="auth-password">Password</label>
-              <div className="input-with-icon">
-                <Lock size={17} className="field-icon" />
-                <input
-                  id="auth-password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  minLength={register ? 8 : 1}
-                  autoComplete="new-password"
-                  aria-describedby={register ? "password-requirements" : undefined}
-                  aria-invalid={register && missingRequirements.length > 0}
-                  placeholder="Enter your access key"
-                />
-                <button
-                  type="button"
-                  className="password-toggle-btn"
-                  onClick={() => setShowPassword(value => !value)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
-                </button>
-              </div>
-            </div>
+              {register && (
+                <>
+                  <div className="field-group">
+                    <label htmlFor="auth-phone">Mobile number (Bangladesh) <span style={{ color: "#ef4444" }}>*</span></label>
+                    <div className="input-with-icon">
+                      <Phone size={17} className="field-icon" />
+                      <input
+                        id="auth-phone"
+                        name="phone"
+                        type="tel"
+                        value={phone}
+                        onChange={e => setPhone(e.target.value)}
+                        required
+                        autoComplete="tel"
+                        placeholder="+8801991000166"
+                      />
+                    </div>
+                    <small style={{ color: "#64748b", fontSize: 12, marginTop: 4, display: "block" }}>
+                      Format: +8801XXXXXXXXX or 01XXXXXXXXX
+                    </small>
+                  </div>
 
-            {register && missingRequirements.length > 0 && (
-              <p id="password-requirements" role="alert">Password requires {missingRequirements.join(", ")}.</p>
-            )}
+                  <div className="field-group">
+                    <label>Gender <span style={{ color: "#ef4444" }}>*</span></label>
+                    <div className="role-selector-box" ref={genderDropdownRef}>
+                      <div className="role-current-display">
+                        <span className="role-current-label">{gender}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="role-select-arrow-btn"
+                        onClick={() => setGenderDropdownOpen(prev => !prev)}
+                        aria-label="Toggle gender dropdown"
+                        aria-expanded={genderDropdownOpen}
+                      >
+                        <ChevronRight
+                          size={22}
+                          strokeWidth={2.5}
+                          className={`role-select-chevron ${genderDropdownOpen ? "open" : ""}`}
+                        />
+                      </button>
 
-            {/* Access as dropdown */}
-            <div className="field-group">
-              <label>Access as</label>
-              <div className="role-selector-box" ref={roleDropdownRef}>
-                <div className="role-current-display">
-                  <span className="role-badge-icon">
-                    {role === "Ward Officer" ? (
-                      <Shield size={22} />
-                    ) : role === "Truck Driver" ? (
-                      <Truck size={22} />
-                    ) : role === "Citizen" ? (
-                      <User size={22} />
-                    ) : (
-                      <Sparkles size={22} />
-                    )}
-                  </span>
-                  <span className="role-current-label">{role}</span>
-                </div>
-                <button
-                  type="button"
-                  className="role-select-arrow-btn"
-                  onClick={() => setRoleDropdownOpen(prev => !prev)}
-                  aria-label="Toggle role dropdown"
-                  aria-expanded={roleDropdownOpen}
-                >
-                  <ChevronRight
-                    size={22}
-                    strokeWidth={2.5}
-                    className={`role-select-chevron ${roleDropdownOpen ? "open" : ""}`}
-                  />
-                </button>
-
-                <AnimatePresence>
-                  {roleDropdownOpen && (
-                    <motion.div
-                      className="role-dropdown-menu"
-                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                      transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                      <AnimatePresence>
+                        {genderDropdownOpen && (
+                          <motion.div
+                            className="role-dropdown-menu"
+                            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                          >
+                            {(["Male", "Female", "Other"] as const).map(g => (
+                              <button
+                                key={g}
+                                type="button"
+                                className={`role-dropdown-item ${gender === g ? "selected" : ""}`}
+                                onClick={() => {
+                                  setGender(g);
+                                  setGenderDropdownOpen(false);
+                                }}
+                              >
+                                <span className="dropdown-item-text">{g}</span>
+                                {gender === g && (
+                                  <Check
+                                    size={18}
+                                    strokeWidth={2.8}
+                                    className="dropdown-item-check"
+                                  />
+                                )}
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                </>
+              )}
+              <div className="field-group">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <label htmlFor="auth-password" style={{ margin: 0 }}>Password</label>
+                  {!register && !cityAdmin && (
+                    <button
+                      type="button"
+                      className="forgot-password-link"
+                      onClick={() => {
+                        setShowForgotModal(true);
+                        setForgotStep("email");
+                        setForgotError("");
+                        setForgotSuccess("");
+                      }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#558B2F",
+                        fontWeight: 700,
+                        fontSize: "14px",
+                        cursor: "pointer",
+                        padding: 0,
+                      }}
                     >
-                      {(
-                        [
-                          { name: "Ward Officer", icon: <Shield size={20} /> },
-                          { name: "Truck Driver", icon: <Truck size={20} /> },
-                          { name: "Citizen", icon: <User size={20} /> },
-                          { name: "City Admin", icon: <Sparkles size={20} /> },
-                        ] as const
-                      ).map(item => (
-                        <button
-                          key={item.name}
-                          type="button"
-                          className={`role-dropdown-item ${role === item.name ? "selected" : ""}`}
-                          onClick={() => handleSelectRole(item.name)}
-                        >
-                          <span className="dropdown-item-icon">{item.icon}</span>
-                          <span className="dropdown-item-text">{item.name}</span>
-                          {role === item.name && (
-                            <Check
-                              size={18}
-                              strokeWidth={2.8}
-                              className="dropdown-item-check"
-                            />
-                          )}
-                        </button>
-                      ))}
-                    </motion.div>
+                      Forgot password?
+                    </button>
                   )}
-                </AnimatePresence>
+                </div>
+                <div className="input-with-icon">
+                  <Lock size={17} className="field-icon" />
+                  <input
+                    id="auth-password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                    minLength={register ? 8 : 1}
+                    autoComplete="new-password"
+                    aria-describedby={register ? "password-requirements" : undefined}
+                    aria-invalid={register && missingRequirements.length > 0}
+                    placeholder="Enter your access key"
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowPassword(value => !value)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {error && (
+              {register && missingRequirements.length > 0 && (
+                <p id="password-requirements" role="alert">Password requires {missingRequirements.join(", ")}.</p>
+              )}
+
+              {/* Access as dropdown */}
+              {!cityAdmin && <div className="field-group">
+                <label>Access as</label>
+                <div className="role-selector-box" ref={roleDropdownRef}>
+                  <div className="role-current-display">
+                    <span className="role-badge-icon">
+                      {role === "Ward Officer" ? (
+                        <Shield size={22} />
+                      ) : role === "Truck Driver" ? (
+                        <Truck size={22} />
+                      ) : role === "Citizen" ? (
+                        <User size={22} />
+                      ) : (
+                        <Sparkles size={22} />
+                      )}
+                    </span>
+                    <span className="role-current-label">{role}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="role-select-arrow-btn"
+                    onClick={() => setRoleDropdownOpen(prev => !prev)}
+                    aria-label="Toggle role dropdown"
+                    aria-expanded={roleDropdownOpen}
+                  >
+                    <ChevronRight
+                      size={22}
+                      strokeWidth={2.5}
+                      className={`role-select-chevron ${roleDropdownOpen ? "open" : ""}`}
+                    />
+                  </button>
+
+                  <AnimatePresence>
+                    {roleDropdownOpen && (
+                      <motion.div
+                        className="role-dropdown-menu"
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                      >
+                        {(
+                          [
+                            { name: "Ward Officer", icon: <Shield size={20} /> },
+                            { name: "Truck Driver", icon: <Truck size={20} /> },
+                            { name: "Citizen", icon: <User size={20} /> },
+                          ] as const
+                        ).map(item => (
+                          <button
+                            key={item.name}
+                            type="button"
+                            className={`role-dropdown-item ${role === item.name ? "selected" : ""}`}
+                            onClick={() => handleSelectRole(item.name)}
+                          >
+                            <span className="dropdown-item-icon">{item.icon}</span>
+                            <span className="dropdown-item-text">{item.name}</span>
+                            {role === item.name && (
+                              <Check
+                                size={18}
+                                strokeWidth={2.8}
+                                className="dropdown-item-check"
+                              />
+                            )}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>}
+
+              {register && (role === "Ward Officer" || role === "Citizen") && (
+                <div className="field-group">
+                  <label htmlFor="auth-ward">
+                    {role === "Citizen" ? "Choose your ward" : "Requested service ward"} <span style={{ color: "#d9534f" }}>*</span>
+                  </label>
+                  <select
+                    id="auth-ward"
+                    name="requestedWardId"
+                    value={requestedWardId}
+                    onChange={e => setRequestedWardId(e.target.value ? Number(e.target.value) : "")}
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "12px 14px",
+                      borderRadius: 10,
+                      border: "1px solid #d2d6dc",
+                      background: "#fff",
+                      fontSize: 14,
+                      color: "#1f2937",
+                      cursor: "pointer",
+                      outline: "none",
+                    }}
+                  >
+                    <option value="">{role === "Citizen" ? "Select your residence ward" : "Select your service ward"}</option>
+                    {wards.map(w => (
+                      <option key={w.wardId} value={w.wardId}>
+                        {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {error && (
+                <div
+                  className="auth-error-banner"
+                  role="alert"
+                  style={{
+                    color: "#a32c26",
+                    background: "#fff0ee",
+                    border: "1px solid #e4aaa5",
+                    borderRadius: 8,
+                    padding: "12px 14px",
+                  }}
+                >
+                  {error}
+                </div>
+              )}
+              <motion.button
+                type="submit"
+                aria-label={register ? "Create account" : "Sign in"}
+                whileHover={{ scale: busy ? 1 : 1.02 }}
+                whileTap={{ scale: busy ? 1 : 0.98 }}
+                disabled={busy || (register && missingRequirements.length > 0)}
+                className="lime-button full open-access-btn"
+              >
+                {busy
+                  ? "Authenticating..."
+                  : register
+                    ? "Create access layer"
+                    : cityAdmin ? "Sign in as City Admin" : "Open access layer"}
+                <ArrowUpRight size={22} strokeWidth={2.6} />
+              </motion.button>
+
+              {!cityAdmin && (
+                <>
+                  {/* Google Sign In Divider & Button */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "14px 0 6px" }}>
+                    <div style={{ flex: 1, height: 1, background: "rgba(16, 59, 60, 0.12)" }} />
+                    <span style={{ fontSize: 13, color: "#64748B", fontWeight: 700 }}>OR</span>
+                    <div style={{ flex: 1, height: 1, background: "rgba(16, 59, 60, 0.12)" }} />
+                  </div>
+
+                  <button
+                    type="button"
+                    className="google-auth-btn"
+                    disabled={busy}
+                    onClick={handleGoogleSignIn}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 12,
+                      width: "100%",
+                      minHeight: 52,
+                      borderRadius: 12,
+                      border: "1.5px solid rgba(16, 59, 60, 0.18)",
+                      background: "#FFFFFF",
+                      color: "#1E293B",
+                      fontWeight: 700,
+                      fontSize: 16,
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                      boxShadow: "0 2px 4px rgba(0,0,0,0.04)"
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.15C3.26 21.3 7.35 24 12 24z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.28 14.24c-.25-.72-.38-1.49-.38-2.24s.13-1.52.38-2.24V6.61H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.39l3.99-3.15z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.7 1.29 6.61l3.99 3.15c.95-2.85 3.6-4.96 6.72-4.96z"
+                      />
+                    </svg>
+                    <span>Continue with Google</span>
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Password Reset Modal */}
+          <AnimatePresence>
+            {showForgotModal && (
               <div
-                className="auth-error-banner"
-                role="alert"
                 style={{
-                  color: "#a32c26",
-                  background: "#fff0ee",
-                  border: "1px solid #e4aaa5",
-                  borderRadius: 8,
-                  padding: "12px 14px",
+                  position: "fixed",
+                  inset: 0,
+                  background: "rgba(15, 23, 42, 0.65)",
+                  backdropFilter: "blur(6px)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 9999,
+                  padding: 20
                 }}
               >
-                {error}
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                  style={{
+                    background: "#FFFFFF",
+                    borderRadius: 16,
+                    padding: 32,
+                    maxWidth: 440,
+                    width: "100%",
+                    boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                    <h3 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#0F172A" }}>
+                      {forgotStep === "email" ? "Reset Your Password" : "Enter Reset Token"}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotModal(false)}
+                      style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#64748B" }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {forgotError && (
+                    <div style={{ background: "#FEF2F2", color: "#991B1B", border: "1px solid #FCA5A5", borderRadius: 8, padding: 12, fontSize: 14, marginBottom: 16 }}>
+                      {forgotError}
+                    </div>
+                  )}
+
+                  {forgotSuccess && (
+                    <div style={{ background: "#F0FDF4", color: "#166534", border: "1px solid #86EFAC", borderRadius: 8, padding: 12, fontSize: 14, marginBottom: 16 }}>
+                      {forgotSuccess}
+                    </div>
+                  )}
+
+                  {forgotStep === "email" ? (
+                    <form
+                      onSubmit={async e => {
+                        e.preventDefault();
+                        if (!forgotEmail) return;
+                        setForgotBusy(true);
+                        setForgotError("");
+                        setForgotSuccess("");
+                        try {
+                          const res = await apiClient.post("/api/auth/forgot-password", { email: forgotEmail });
+                          if (res.data.token) {
+                            setGeneratedToken(res.data.token);
+                            setResetToken(res.data.token);
+                            setForgotSuccess("Reset token generated! Proceeding to reset step.");
+                            setForgotStep("token");
+                          } else {
+                            setForgotSuccess(res.data.message || "Reset link generated.");
+                            setForgotStep("token");
+                          }
+                        } catch (err) {
+                          setForgotError(apiError(err));
+                        } finally {
+                          setForgotBusy(false);
+                        }
+                      }}
+                    >
+                      <p style={{ color: "#64748B", fontSize: 15, marginTop: 0, marginBottom: 16 }}>
+                        Enter your registered email address and we'll generate a password reset token for you.
+                      </p>
+                      <div className="field-group" style={{ marginBottom: 20 }}>
+                        <label htmlFor="forgot-email-input">Email Address</label>
+                        <div className="input-with-icon">
+                          <Mail size={17} className="field-icon" />
+                          <input
+                            id="forgot-email-input"
+                            type="email"
+                            value={forgotEmail}
+                            onChange={e => setForgotEmail(e.target.value)}
+                            required
+                            placeholder="you@example.com"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={forgotBusy}
+                        className="lime-button full"
+                        style={{ minHeight: 48 }}
+                      >
+                        {forgotBusy ? "Generating Token..." : "Request Reset Token"}
+                      </button>
+                    </form>
+                  ) : (
+                    <form
+                      onSubmit={async e => {
+                        e.preventDefault();
+                        if (!resetToken || !newPassword) return;
+                        setForgotBusy(true);
+                        setForgotError("");
+                        setForgotSuccess("");
+                        try {
+                          await apiClient.post("/api/auth/reset-password", {
+                            email: forgotEmail,
+                            token: resetToken,
+                            newPassword,
+                          });
+                          setForgotSuccess("Password reset successfully! You can now log in.");
+                          setTimeout(() => {
+                            setShowForgotModal(false);
+                            setEmail(forgotEmail);
+                          }, 1800);
+                        } catch (err) {
+                          setForgotError(apiError(err));
+                        } finally {
+                          setForgotBusy(false);
+                        }
+                      }}
+                    >
+                      {generatedToken && (
+                        <div style={{ background: "#F1F5F9", padding: 12, borderRadius: 8, marginBottom: 16, fontSize: 13, color: "#334155" }}>
+                          <b>Generated Token:</b>
+                          <div style={{ fontFamily: "monospace", background: "#E2E8F0", padding: "6px 8px", borderRadius: 4, marginTop: 4, wordBreak: "break-all" }}>
+                            {generatedToken}
+                          </div>
+                        </div>
+                      )}
+                      <div className="field-group" style={{ marginBottom: 16 }}>
+                        <label htmlFor="reset-token-input">Reset Token</label>
+                        <div className="input-with-icon">
+                          <Key size={17} className="field-icon" />
+                          <input
+                            id="reset-token-input"
+                            value={resetToken}
+                            onChange={e => setResetToken(e.target.value)}
+                            required
+                            placeholder="Paste reset token here"
+                          />
+                        </div>
+                      </div>
+                      <div className="field-group" style={{ marginBottom: 20 }}>
+                        <label htmlFor="new-password-input">New Password</label>
+                        <div className="input-with-icon">
+                          <Lock size={17} className="field-icon" />
+                          <input
+                            id="new-password-input"
+                            type="password"
+                            value={newPassword}
+                            onChange={e => setNewPassword(e.target.value)}
+                            required
+                            minLength={8}
+                            placeholder="Min 8 chars (letters, numbers, symbol)"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={forgotBusy}
+                        className="lime-button full"
+                        style={{ minHeight: 48 }}
+                      >
+                        {forgotBusy ? "Resetting Password..." : "Reset Password"}
+                      </button>
+                    </form>
+                  )}
+                </motion.div>
               </div>
             )}
-            <motion.button
-              type="submit"
-              aria-label={register ? "Create account" : "Sign in"}
-              whileHover={{ scale: busy ? 1 : 1.02 }}
-              whileTap={{ scale: busy ? 1 : 0.98 }}
-              disabled={busy || (register && missingRequirements.length > 0)}
-              className="lime-button full open-access-btn"
-            >
-              {busy
-                ? "Authenticating..."
-                : register
-                  ? "Create access layer"
-                  : "Open access layer"}
-              <ArrowUpRight size={22} strokeWidth={2.6} />
-            </motion.button>
-          </div>
+          </AnimatePresence>
+
+          {/* Google Account Selector Modal */}
+          <AnimatePresence>
+            {showGoogleModal && (
+              <div
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  background: "rgba(15, 23, 42, 0.65)",
+                  backdropFilter: "blur(6px)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 9999,
+                  padding: 20,
+                }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                  style={{
+                    background: "#FFFFFF",
+                    borderRadius: 16,
+                    padding: 32,
+                    maxWidth: 440,
+                    width: "100%",
+                    boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <svg width="24" height="24" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z" />
+                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.15C3.26 21.3 7.35 24 12 24z" />
+                        <path fill="#FBBC05" d="M5.28 14.24c-.25-.72-.38-1.49-.38-2.24s.13-1.52.38-2.24V6.61H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.39l3.99-3.15z" />
+                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.7 1.29 6.61l3.99 3.15c.95-2.85 3.6-4.96 6.72-4.96z" />
+                      </svg>
+                      <h3 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#0F172A" }}>
+                        Sign in with Google
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowGoogleModal(false)}
+                      style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#64748B" }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <p style={{ color: "#64748B", fontSize: 14, marginTop: 0, marginBottom: 20, lineHeight: 1.5 }}>
+                    Google Accounts login window opened! Confirm your <b>Gmail address</b> to sign into your <b>{role}</b> workspace:
+                  </p>
+
+                  <form
+                    onSubmit={e => {
+                      e.preventDefault();
+                      submitGoogleAuth(googleEmailInput, googleNameInput);
+                    }}
+                  >
+                    <div className="field-group" style={{ marginBottom: 16 }}>
+                      <label htmlFor="google-email-input">Google / Gmail Address</label>
+                      <div className="input-with-icon">
+                        <Mail size={17} className="field-icon" />
+                        <input
+                          id="google-email-input"
+                          type="email"
+                          value={googleEmailInput}
+                          onChange={e => setGoogleEmailInput(e.target.value)}
+                          required
+                          placeholder="e.g. name@gmail.com"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="field-group" style={{ marginBottom: 24 }}>
+                      <label htmlFor="google-name-input">Full Name (from Google Profile)</label>
+                      <div className="input-with-icon">
+                        <User size={17} className="field-icon" />
+                        <input
+                          id="google-name-input"
+                          value={googleNameInput}
+                          onChange={e => setGoogleNameInput(e.target.value)}
+                          placeholder="e.g. Fairuz Anadi"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={busy}
+                      className="lime-button full"
+                      style={{ minHeight: 50, fontSize: 16, fontWeight: 800 }}
+                    >
+                      {busy ? "Authenticating Google Account..." : "Continue with this Google Account"}
+                    </button>
+                  </form>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
           <div className="civic-workspace-footer">
             <span className="workspace-line" />
             <span className="workspace-text">PROTECTED CIVIC WORKSPACE</span>
             <span className="workspace-line" />
           </div>
-          <div className="auth-switch">
+          {!cityAdmin && <div className="auth-switch">
             {register ? "Already have access?" : "Need an account?"}{" "}
             <Link to={register ? "/login" : "/register"}>
               {register ? "Sign in" : "Register here"}
             </Link>
-          </div>
+          </div>}
         </motion.form>
       </div>
     </div>

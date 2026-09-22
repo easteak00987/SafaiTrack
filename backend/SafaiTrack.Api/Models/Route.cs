@@ -10,6 +10,7 @@ public class Route
     public string Status { get; set; } = "Planned"; // "Pending", "AwaitingAcceptance", legacy "Planned", "InProgress", "Completed"
     public int? TruckId { get; set; }
     public string? DriverId { get; set; }
+    public DateTime? CompletedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Ward? Ward { get; set; }

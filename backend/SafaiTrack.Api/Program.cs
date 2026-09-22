@@ -15,7 +15,6 @@ var builder = WebApplication.CreateBuilder(args);
 // DATABASE_URL, which Npgsql cannot parse. Translate it when present; a normal
 // key/value connection string in configuration still wins.
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-
 if (string.IsNullOrWhiteSpace(connectionString))
 {
     var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
@@ -34,12 +33,21 @@ if (!string.IsNullOrWhiteSpace(port))
     builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 }
 
-// 1. Configure DbContext with PostgreSQL from configuration
+// 1. Configure DbContext dynamically with SQL Server or PostgreSQL
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
     if (!string.IsNullOrEmpty(connectionString))
     {
-        options.UseNpgsql(connectionString);
+        if (connectionString.StartsWith("Host=", StringComparison.OrdinalIgnoreCase) ||
+            connectionString.Contains("Port=", StringComparison.OrdinalIgnoreCase) ||
+            connectionString.Contains("Username=", StringComparison.OrdinalIgnoreCase))
+        {
+            options.UseNpgsql(connectionString);
+        }
+        else
+        {
+            options.UseSqlServer(connectionString);
+        }
     }
 });
 
@@ -63,8 +71,6 @@ var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "SafaiTrack.Client";
 
 if (string.IsNullOrWhiteSpace(jwtKey))
 {
-    // The development fallback must never reach a deployed environment: this key is
-    // in a public repository, and anyone holding it can mint tokens for any role.
     if (!builder.Environment.IsDevelopment())
     {
         throw new InvalidOperationException(
@@ -73,9 +79,6 @@ if (string.IsNullOrWhiteSpace(jwtKey))
     }
 
     jwtKey = "SafaiTrack_SuperSecret_Jwt_SigningKey_2026_DevEnvironment_AtLeast32Chars!";
-
-    // TokenService resolves the key from configuration, so the fallback has to live
-    // there too rather than only in this local.
     builder.Configuration["Jwt:Key"] = jwtKey;
 }
 
@@ -138,8 +141,7 @@ else
     builder.Services.AddSingleton<IPaymentGateway, SimulatedPaymentGateway>();
 }
 
-// 5. Configure CORS. Deployed environments serve the client from a different origin
-// than the API, so the allowed origins come from configuration rather than a constant.
+// 5. Configure CORS
 var allowedOrigins = builder.Configuration
     .GetSection("Cors:AllowedOrigins").Get<string[]>();
 
@@ -159,13 +161,9 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Behind a reverse proxy (App Service, Caddy, nginx) the original scheme and client
-// address arrive as headers. Without this the app believes every request is plain
-// HTTP from the proxy, which breaks redirect URLs handed to the payment gateway.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    // The proxy is the platform's, not ours, so its address is not known ahead of time.
     options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
 });
@@ -191,7 +189,7 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "Bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Enter 'Bearer' [space] and then your valid JWT token.\n\nExample: \"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\""
+        Description = "Enter 'Bearer' [space] and then your valid JWT token."
     });
 
     options.AddSecurityRequirement(_ => new OpenApiSecurityRequirement
@@ -203,6 +201,9 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+builder.Services.Configure<PayrollOptions>(builder.Configuration.GetSection("Payroll"));
+builder.Services.AddScoped<PayrollService>();
+
 var app = builder.Build();
 
 app.Logger.LogInformation(
@@ -212,14 +213,8 @@ app.Logger.LogInformation(
     sslCommerzOptions.UseSandbox ? "sandbox" : "live");
 
 app.UseForwardedHeaders();
-
-// Ahead of the endpoints so it can catch serialization failures thrown by the
-// Serializable transactions in the dispatch and payment paths.
 app.UseMiddleware<SerializationFailureMiddleware>();
 
-// Configure the HTTP request pipeline.
-// Swagger stays available in deployed environments too — this is a course project
-// whose API is meant to be inspectable. Set "Swagger:Enabled" to false to hide it.
 if (builder.Configuration.GetValue("Swagger:Enabled", true))
 {
     app.UseSwagger();
@@ -232,14 +227,10 @@ else
 }
 
 app.UseHttpsRedirection();
-
 app.UseCors("AllowFrontend");
-
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Liveness probe for the hosting platform. Deliberately does not touch the database:
-// a database blip should not cause the platform to recycle a healthy app.
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "healthy",
@@ -249,45 +240,45 @@ app.MapGet("/health", () => Results.Ok(new
 
 app.MapControllers();
 
-// Bring the schema up to date, then seed. A freshly provisioned database starts
-// empty, and a container-hosted SQL Server is usually still accepting connections
-// only after the app has already started, so this retries rather than giving up.
+// Bring the schema up to date and seed
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     var logger = services.GetRequiredService<ILogger<Program>>();
     var context = services.GetRequiredService<ApplicationDbContext>();
-    var autoMigrate = builder.Configuration.GetValue("Database:AutoMigrate", true);
+    var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
 
     for (var attempt = 1; attempt <= 10; attempt++)
     {
         try
         {
-            if (autoMigrate)
+            if (context.Database.IsNpgsql())
             {
                 await context.Database.MigrateAsync();
-                logger.LogInformation("Database schema is up to date.");
             }
-            else if (!await context.Database.CanConnectAsync())
+            else
             {
-                throw new InvalidOperationException("Database is not reachable.");
+                await context.Database.EnsureCreatedAsync();
+                using var upgradeStream = typeof(ApplicationDbContext).Assembly.GetManifestResourceStream("SafaiTrack.Api.Data.CityAdministration.SqlServer.sql")!;
+                using var upgradeReader = new StreamReader(upgradeStream);
+                await context.Database.ExecuteSqlRawAsync(await upgradeReader.ReadToEndAsync());
             }
 
-            await DbSeeder.SeedAsync(context);
+            await DbSeeder.SeedAsync(context, userManager, roleManager);
+            logger.LogInformation("Database schema and seeding completed successfully.");
             break;
         }
         catch (Exception ex) when (attempt < 10)
         {
             logger.LogWarning(
-                "Database not ready (attempt {Attempt}/10): {Message}. Retrying in 5s.",
+                "Database not ready (attempt {Attempt}/10): {Message}. Retrying in 3s.",
                 attempt, ex.Message);
-            await Task.Delay(TimeSpan.FromSeconds(5));
+            await Task.Delay(TimeSpan.FromSeconds(3));
         }
         catch (Exception ex)
         {
-            // Starting without a database is preferable to crash-looping: the health
-            // endpoint stays up and the platform's logs show why.
-            logger.LogError(ex, "Database could not be prepared. The API is starting anyway.");
+            logger.LogError(ex, "Database could not be prepared or seeded. API starting anyway.");
         }
     }
 }

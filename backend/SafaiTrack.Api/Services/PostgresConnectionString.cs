@@ -38,6 +38,7 @@ public static class PostgresConnectionString
             Host = uri.Host,
             Port = uri.Port > 0 ? uri.Port : 5432,
             Database = uri.AbsolutePath.TrimStart('/'),
+
             // Credentials arrive percent-encoded inside the URI.
             Username = Uri.UnescapeDataString(userInfo[0]),
             Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : null,

@@ -24,17 +24,21 @@ public class TrucksController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TruckResponseDto>>> GetTrucks()
     {
-        var trucks = await _context.Trucks
-            .AsNoTracking()
-            .Select(t => new TruckResponseDto
-            {
-                TruckId = t.TruckId,
-                PlateNumber = t.PlateNumber,
-                Status = t.Status
-            })
+        var activeTruckIds = await _context.Routes
+            .Where(r => r.Status != "Completed" && r.TruckId != null)
+            .Select(r => r.TruckId!.Value)
             .ToListAsync();
 
-        return Ok(trucks);
+        var trucks = await _context.Trucks
+            .AsNoTracking()
+            .ToListAsync();
+
+        return Ok(trucks.Select(t => new TruckResponseDto
+        {
+            TruckId = t.TruckId,
+            PlateNumber = t.PlateNumber,
+            Status = activeTruckIds.Contains(t.TruckId) ? "OnRoute" : t.Status
+        }));
     }
 
     [HttpGet("{id}")]

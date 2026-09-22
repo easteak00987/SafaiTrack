@@ -82,3 +82,9 @@ Thumbs.db
 # --------------------------------------------------
 backend/SafaiTrack.Api/wwwroot/uploads/complaint-photos/*
 !backend/SafaiTrack.Api/wwwroot/uploads/complaint-photos/.gitkeep
+
+# --------------------------------------------------
+# Build / Binary Artifacts
+# --------------------------------------------------
+artifacts/
+

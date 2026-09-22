@@ -7,6 +7,10 @@ namespace SafaiTrack.Api.Models;
 /// </summary>
 public class Payment
 {
+    [System.ComponentModel.DataAnnotations.MaxLength(20)]
+    public string? ReviewStatus { get; set; }
+    public string? ReviewedById { get; set; }
+    public DateTime? ReviewedAt { get; set; }
     public int PaymentId { get; set; }
 
     public int InvoiceId { get; set; }
