@@ -110,7 +110,7 @@ public class CityAdminController(ApplicationDbContext db, IOptions<BillingOption
         var wage = await db.DriverWages.FindAsync(id);
         if (wage == null) return NotFound();
         if (wage.ReleasedAt != null) return Ok(new { message = "This wage has already been released." });
-        if (!PayrollService.Eligible(wage, DateTime.UtcNow)) return Conflict(new { message = "The 24-hour period must close and the work quota must be completed first." });
+        if (!PayrollService.Eligible(wage, DateTime.UtcNow)) return Conflict(new { message = "The work quota must be completed first." });
         wage.Status = "ReadyForCollection"; wage.ReleasedAt = DateTime.UtcNow; wage.ReleasedById = ActorId;
         Notify(wage.DriverId, "Your daily wages are ready", $"City Admin released {wage.Amount:0.##} BDT, including {wage.BonusAmount:0.##} BDT bonus. Open Wages to collect now or later.", "/driver/wages");
         await db.SaveChangesAsync(); await tx.CommitAsync();

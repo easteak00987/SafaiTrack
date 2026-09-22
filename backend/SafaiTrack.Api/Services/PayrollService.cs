@@ -32,8 +32,8 @@ public class PayrollService(ApplicationDbContext db, IOptions<PayrollOptions> op
         wage.Amount = subtotal + wage.BonusAmount;
     }
 
-    public static bool Eligible(DriverWage wage, DateTime now) => wage.PeriodEnd <= now
-        && wage.RoutesCompleted >= wage.RequiredRoutes && wage.BinsCollected >= wage.RequiredBins;
+    public static bool Eligible(DriverWage wage, DateTime now) =>
+        wage.RoutesCompleted >= wage.RequiredRoutes && wage.BinsCollected >= wage.RequiredBins;
 
     public static object View(DriverWage w) => new {
         w.DriverWageId, w.DriverId, DriverName = w.Driver?.FullName, PhoneNumber = w.Driver?.PhoneNumber,
