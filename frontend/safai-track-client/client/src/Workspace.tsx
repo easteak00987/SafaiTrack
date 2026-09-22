@@ -1124,7 +1124,7 @@ function Dispatch({ onDispatch, pending }: { onDispatch: () => void; pending?: C
             <option value="">Select driver</option>
             {drivers.data?.map(d => (
               <option key={d.id} value={d.id} disabled={d.isBusy}>
-                {d.fullName} {d.wardId ? `[Ward ${d.wardId}]` : "[City Pool]"}{d.email ? ` (${d.email})` : ""}{d.isBusy ? " — [On Route]" : ""}
+                {d.fullName} {d.wardId ? `[Ward ${d.wardId}]` : "[City Pool]"}{d.email ? ` (${d.email})` : ""}{d.isBusy ? " — [On Route]" : " — [Available]"}
               </option>
             ))}
           </select>

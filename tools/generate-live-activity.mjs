@@ -212,7 +212,7 @@ async function main() {
 
         // Fetch stops
         const detailRes = await request(`/api/routes/${r.routeId}`, { token: drvSession.token });
-        const stops = detailRes.data?.routeStops || [];
+        const stops = detailRes.data?.stops || detailRes.data?.routeStops || [];
 
         // Collect every stop in sequence
         for (const stop of stops) {
