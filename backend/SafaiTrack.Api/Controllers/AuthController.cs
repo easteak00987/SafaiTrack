@@ -183,6 +183,121 @@ public class AuthController : ControllerBase
         });
     }
 
+    [HttpPost("google")]
+    public async Task<ActionResult<AuthResponseDto>> GoogleAuth([FromBody] GoogleAuthDto dto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var email = dto.Email.Trim().ToLowerInvariant();
+        var user = await _userManager.FindByEmailAsync(email);
+
+        if (user == null)
+        {
+            var requestedRole = !string.IsNullOrWhiteSpace(dto.Role) && AllowedRoles.Contains(dto.Role, StringComparer.OrdinalIgnoreCase)
+                ? AllowedRoles.First(r => r.Equals(dto.Role, StringComparison.OrdinalIgnoreCase))
+                : "Citizen";
+
+            var fullName = !string.IsNullOrWhiteSpace(dto.Name) ? dto.Name : email.Split('@')[0];
+
+            user = new ApplicationUser
+            {
+                UserName = email,
+                Email = email,
+                FullName = fullName,
+                Role = requestedRole,
+                EmailConfirmed = true,
+                Status = "Active"
+            };
+
+            var createResult = await _userManager.CreateAsync(user);
+            if (!createResult.Succeeded)
+            {
+                return BadRequest(new { message = "Failed to register user via Google.", errors = createResult.Errors.Select(e => e.Description) });
+            }
+
+            if (!await _roleManager.RoleExistsAsync(requestedRole))
+            {
+                await _roleManager.CreateAsync(new IdentityRole(requestedRole));
+            }
+            await _userManager.AddToRoleAsync(user, requestedRole);
+        }
+
+        if (user.Status != "Active")
+        {
+            return Unauthorized(new { message = user.Status == "Rejected" ? "Your registration was declined." : "Your registration is pending City Admin approval.", status = user.Status });
+        }
+
+        var (token, expiresAt) = _tokenService.GenerateToken(user);
+
+        return Ok(new AuthResponseDto
+        {
+            Token = token,
+            FullName = user.FullName,
+            Role = user.Role,
+            Status = user.Status,
+            ExpiresAt = expiresAt
+        });
+    }
+
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var user = await _userManager.FindByEmailAsync(dto.Email);
+        if (user == null)
+        {
+            return Ok(new { message = "If the account exists, a reset token has been generated.", token = (string?)null });
+        }
+
+        var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+
+        return Ok(new
+        {
+            message = "Password reset token generated successfully.",
+            token = resetToken,
+            email = user.Email
+        });
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var missing = new List<string>();
+        if (dto.NewPassword.Length < 8) missing.Add("at least 8 characters");
+        if (!System.Text.RegularExpressions.Regex.IsMatch(dto.NewPassword, "[a-z]")) missing.Add("a lowercase letter");
+        if (!System.Text.RegularExpressions.Regex.IsMatch(dto.NewPassword, "[A-Z]")) missing.Add("an uppercase letter");
+        if (!System.Text.RegularExpressions.Regex.IsMatch(dto.NewPassword, "[0-9]")) missing.Add("a number");
+        if (!System.Text.RegularExpressions.Regex.IsMatch(dto.NewPassword, @"[^a-zA-Z0-9\s]")) missing.Add("a special character");
+        if (missing.Count > 0)
+            return BadRequest(new { message = $"New password requires {string.Join(", ", missing)}." });
+
+        var user = await _userManager.FindByEmailAsync(dto.Email);
+        if (user == null)
+        {
+            return BadRequest(new { message = "Invalid password reset request." });
+        }
+
+        var result = await _userManager.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
+        if (!result.Succeeded)
+        {
+            return BadRequest(new { message = "Password reset failed.", errors = result.Errors.Select(e => e.Description) });
+        }
+
+        return Ok(new { message = "Password has been reset successfully. You can now log in with your new password." });
+    }
+
     [Authorize]
     [HttpGet("me")]
     public async Task<ActionResult<object>> GetCurrentUser()
